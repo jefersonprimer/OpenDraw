@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Toolbar, Tool } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { db, WhiteboardElement } from '@/lib/db';
+import { useHistoryState } from '@/lib/useHistoryState';
 
 const Canvas = dynamic(() => import('./Canvas').then((mod) => mod.Canvas), {
   ssr: false,
@@ -12,7 +13,7 @@ const Canvas = dynamic(() => import('./Canvas').then((mod) => mod.Canvas), {
 
 export default function Whiteboard() {
   const [activeTool, setActiveTool] = useState<Tool>('select');
-  const [elements, setElements] = useState<WhiteboardElement[]>([]);
+  const { elements, setElements, saveHistory, undo, redo, canUndo, canRedo } = useHistoryState([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [defaultProps, setDefaultProps] = useState<Partial<WhiteboardElement>>({
@@ -36,16 +37,45 @@ export default function Whiteboard() {
       setElements(storedElements);
     };
     loadElements();
-  }, [refreshKey]);
+  }, [setElements]);
+
+  // Handle Undo/Redo keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if we are in an input or textarea
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'TEXTAREA' || 
+                      target.tagName === 'INPUT' || 
+                      target.isContentEditable ||
+                      document.getElementById('whiteboard-textarea');
+      
+      if (isInput) return;
+
+      const key = e.key.toLowerCase();
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const isShift = e.shiftKey;
+
+      // Undo: Ctrl+Z (without Shift)
+      if (isCtrl && key === 'z' && !isShift) {
+        e.preventDefault();
+        undo();
+      } 
+      // Redo: Ctrl+Y, Ctrl+Shift+Z, or Ctrl+R
+      else if (isCtrl && (key === 'y' || (key === 'z' && isShift) || key === 'r')) {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   const handleClearCanvas = useCallback(async () => {
     if (confirm('Are you sure you want to clear the entire canvas?')) {
-      await db.elements.clear();
-      setElements([]);
-      setSelectedIds([]);
-      setRefreshKey(prev => prev + 1);
+      saveHistory([]);
     }
-  }, []);
+  }, [saveHistory]);
 
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,14 +102,10 @@ export default function Whiteboard() {
       return el;
     });
 
-    setElements(updatedElements);
-
-    // Save to DB
-    for (const id of selectedIds) {
-      const el = updatedElements.find(e => e.id === id);
-      if (el) await db.elements.put(el);
-    }
-  }, [elements, selectedIds]);
+    // For property updates, we might want to save history only when the interaction finishes
+    // But for now, let's just save it. In a real app, we'd debounce this or use an 'onFinishChange' event.
+    saveHistory(updatedElements);
+  }, [elements, selectedIds, saveHistory]);
 
   const handleLayerChange = useCallback(async (action: 'front' | 'back' | 'forward' | 'backward') => {
     if (selectedIds.length === 0) return;
@@ -111,12 +137,8 @@ export default function Whiteboard() {
       }
     }
 
-    setElements(newElements);
-    // In a real app, we might want to update a 'zIndex' property or just re-save all to maintain order
-    // For now, let's just clear and re-add to maintain IndexedDB order if that's how we're loading them
-    await db.elements.clear();
-    await db.elements.bulkAdd(newElements);
-  }, [elements, selectedIds]);
+    saveHistory(newElements);
+  }, [elements, selectedIds, saveHistory]);
 
   const selectedElements = elements.filter(el => selectedIds.includes(el.id));
   const isDrawingTool = ['rectangle', 'circle', 'triangle', 'diamond', 'line', 'arrow', 'pencil', 'text', 'image'].includes(activeTool);
@@ -128,11 +150,18 @@ export default function Whiteboard() {
         setActiveTool={setActiveTool} 
         onClearCanvas={handleClearCanvas}
         onImageUpload={handleImageUpload}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
       />
       <Canvas 
         activeTool={activeTool} 
         elements={elements} 
         setElements={setElements}
+        saveHistory={saveHistory}
+        undo={undo}
+        redo={redo}
         selectedIds={selectedIds}
         setSelectedIds={setSelectedIds}
         defaultProps={defaultProps}

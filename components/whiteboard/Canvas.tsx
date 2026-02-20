@@ -12,6 +12,9 @@ interface CanvasProps {
   activeTool: Tool;
   elements: WhiteboardElement[];
   setElements: React.Dispatch<React.SetStateAction<WhiteboardElement[]>>;
+  saveHistory: (newElements: WhiteboardElement[], customPastState?: WhiteboardElement[]) => void;
+  undo: () => void;
+  redo: () => void;
   selectedIds: string[];
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   defaultProps: Partial<WhiteboardElement>;
@@ -42,6 +45,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   activeTool,
   elements,
   setElements,
+  saveHistory,
+  undo,
+  redo,
   selectedIds,
   setSelectedIds,
   defaultProps
@@ -50,12 +56,15 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionBox, setSelectionBox] = useState({ x: 0, y: 0, width: 0, height: 0, visible: false });
   const [newElement, setNewElement] = useState<WhiteboardElement | null>(null);
+  const newElementRef = useRef<WhiteboardElement | null>(null);
+  const [eraserSnapshot, setEraserSnapshot] = useState<WhiteboardElement[] | null>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
 
-  const saveElement = async (element: WhiteboardElement) => {
-    await db.elements.put(element);
-  };
+  const elementsRef = useRef(elements);
+  useEffect(() => {
+    elementsRef.current = elements;
+  }, [elements]);
 
   useEffect(() => {
     const handleAddImage = async (e: any) => {
@@ -84,13 +93,12 @@ export const Canvas: React.FC<CanvasProps> = ({
         textAlign: 'left',
         ...defaultProps
       };
-      setElements(prev => [...prev, element]);
-      await saveElement(element);
+      saveHistory([...elementsRef.current, element]);
       setSelectedIds([id]);
     };
     window.addEventListener('add-image', handleAddImage);
     return () => window.removeEventListener('add-image', handleAddImage);
-  }, [setElements, setSelectedIds]);
+  }, [saveHistory, setSelectedIds, defaultProps]);
 
   const getRelativePointerPosition = (stage: Konva.Stage) => {
     const transform = stage.getAbsoluteTransform().copy();
@@ -99,12 +107,134 @@ export const Canvas: React.FC<CanvasProps> = ({
     return pos ? transform.point(pos) : { x: 0, y: 0 };
   };
 
-  const handleMouseDown = (e: any) => {
+  const handleEraser = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+
+    const shape = stage.getIntersection(pos);
+    if (shape && shape.id()) {
+      const id = shape.id();
+      setElements((prev) => prev.filter((el) => el.id !== id));
+      setSelectedIds((prev) => prev.filter((sid) => sid !== id));
+    }
+  }, [setElements, setSelectedIds]);
+
+  const handleTextInput = useCallback((x: number, y: number, id: string, initialText = '') => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const existingTextarea = document.getElementById('whiteboard-textarea');
+    if (existingTextarea) {
+      existingTextarea.remove();
+    }
+
+    const stageBox = stage.container().getBoundingClientRect();
+    const textarea = document.createElement('textarea');
+    textarea.id = 'whiteboard-textarea';
+    document.body.appendChild(textarea);
+    
+    textarea.value = initialText;
+    textarea.style.position = 'absolute';
+
+    const absPos = stage.getAbsoluteTransform().point({ x, y });
+    const top = stageBox.top + absPos.y;
+    const left = stageBox.left + absPos.x;
+    const scale = stage.scaleX();
+
+    textarea.style.top = top + 'px';
+    textarea.style.left = left + 'px';
+    textarea.style.fontSize = `${(defaultProps.fontSize || 20) * scale}px`;
+    textarea.style.fontFamily = defaultProps.fontFamily || 'Sans-serif';
+    textarea.style.fontWeight = '500';
+    textarea.style.color = defaultProps.stroke || '#1e1e1e';
+    textarea.style.border = '2px solid #3b82f6';
+    textarea.style.outline = 'none';
+    textarea.style.zIndex = '9999';
+    textarea.style.background = 'white';
+    textarea.style.minWidth = '100px';
+    textarea.style.minHeight = '1.2em';
+    textarea.style.padding = '4px';
+    textarea.style.margin = '0';
+    textarea.style.display = 'block';
+    textarea.style.visibility = 'visible';
+    textarea.style.opacity = '1';
+    textarea.style.overflow = 'hidden';
+    textarea.style.resize = 'none';
+    textarea.style.lineHeight = '1.2';
+    textarea.style.whiteSpace = 'pre';
+    textarea.style.transformOrigin = 'top left';
+    textarea.style.transform = `scale(${scale})`;
+
+    setTimeout(() => {
+      textarea.focus();
+    }, 0);
+
+    let isFinished = false;
+    const finishText = async () => {
+      if (isFinished) return;
+      isFinished = true;
+      
+      const val = textarea.value;
+      const finalWidth = Math.max(textarea.offsetWidth / scale, 100);
+      const finalHeight = Math.max(textarea.offsetHeight / scale, 24);
+
+      if (document.body.contains(textarea)) {
+        document.body.removeChild(textarea);
+      }
+
+      if (val.trim()) {
+        const element: WhiteboardElement = {
+          id,
+          type: 'text',
+          x,
+          y,
+          text: val,
+          width: finalWidth,
+          height: finalHeight,
+          stroke: defaultProps.stroke || '#1e1e1e',
+          fill: 'transparent',
+          strokeWidth: 2,
+          rotation: 0,
+          strokeStyle: 'solid',
+          sloppiness: 1,
+          edges: 'sharp',
+          opacity: 1,
+          fontFamily: defaultProps.fontFamily || 'Sans-serif',
+          fontSize: defaultProps.fontSize || 20,
+          textAlign: defaultProps.textAlign || 'left',
+          ...defaultProps
+        } as WhiteboardElement;
+
+        const currentElements = elementsRef.current;
+        const existingIndex = currentElements.findIndex(el => el.id === id);
+        if (existingIndex !== -1) {
+          const newArr = [...currentElements];
+          newArr[existingIndex] = element;
+          saveHistory(newArr);
+        } else {
+          saveHistory([...currentElements, element]);
+        }
+        setSelectedIds([id]);
+      }
+    };
+
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        finishText();
+      }
+    });
+    textarea.addEventListener('blur', finishText);
+  }, [defaultProps, saveHistory, setSelectedIds]);
+
+  const handleMouseDown = useCallback((e: any) => {
     if (activeTool === 'hand') return;
 
     const stage = e.target.getStage();
     const pos = getRelativePointerPosition(stage);
-    console.log('Mouse Down - Tool:', activeTool, 'Pos:', pos);
 
     if (activeTool === 'select') {
       const isClickedOnTransformer = e.target.getParent()?.className === 'Transformer';
@@ -120,11 +250,14 @@ export const Canvas: React.FC<CanvasProps> = ({
         if (!id) return;
 
         const metaPressed = e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey;
-        const isSelected = selectedIds.includes(id);
-
-        if (!metaPressed && !isSelected) setSelectedIds([id]);
-        else if (metaPressed && isSelected) setSelectedIds(selectedIds.filter((sid) => sid !== id));
-        else if (metaPressed && !isSelected) setSelectedIds([...selectedIds, id]);
+        
+        setSelectedIds(prev => {
+          const isSelected = prev.includes(id);
+          if (!metaPressed && !isSelected) return [id];
+          if (metaPressed && isSelected) return prev.filter((sid) => sid !== id);
+          if (metaPressed && !isSelected) return [...prev, id];
+          return prev;
+        });
       }
       return;
     }
@@ -135,8 +268,9 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (activeTool === 'eraser') {
+      setEraserSnapshot([...elementsRef.current]);
       setIsDrawing(true);
-      handleEraser(pos.x, pos.y);
+      handleEraser();
       return;
     }
 
@@ -170,29 +304,17 @@ export const Canvas: React.FC<CanvasProps> = ({
       ...(activeTool === 'pencil' && { points: [0, 0] }),
     };
 
+    newElementRef.current = element;
     setNewElement(element);
     setSelectedIds([id]);
-  };
+  }, [activeTool, defaultProps, handleTextInput, handleEraser, setSelectedIds]);
 
-  const handleEraser = useCallback(async (x: number, y: number) => {
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const shape = stage.getIntersection({ x, y });
-    if (shape && shape.id()) {
-      const id = shape.id();
-      await db.elements.delete(id);
-      setElements((prev) => prev.filter((el) => el.id !== id));
-      setSelectedIds((prev) => prev.filter((sid) => sid !== id));
-    }
-  }, [setElements, setSelectedIds]);
-
-  const handleMouseMove = (e: any) => {
+  const handleMouseMove = useCallback((e: any) => {
     const stage = e.target.getStage();
     const pos = getRelativePointerPosition(stage);
 
     if (activeTool === 'eraser' && isDrawing) {
-      handleEraser(pos.x, pos.y);
+      handleEraser();
       return;
     }
 
@@ -201,23 +323,27 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    if (!isDrawing || !newElement) return;
+    if (!isDrawing) return;
 
-    const updatedElement = { ...newElement };
+    const currentNew = newElementRef.current;
+    if (!currentNew) return;
+
+    const updatedElement = { ...currentNew };
 
     if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'triangle' || activeTool === 'diamond') {
-      updatedElement.width = pos.x - newElement.x;
-      updatedElement.height = pos.y - newElement.y;
+      updatedElement.width = pos.x - currentNew.x;
+      updatedElement.height = pos.y - currentNew.y;
     } else if (activeTool === 'line' || activeTool === 'arrow') {
-      updatedElement.points = [0, 0, pos.x - newElement.x, pos.y - newElement.y];
+      updatedElement.points = [0, 0, pos.x - currentNew.x, pos.y - currentNew.y];
     } else if (activeTool === 'pencil') {
-      updatedElement.points = [...(newElement.points || []), pos.x - newElement.x, pos.y - newElement.y];
+      updatedElement.points = [...(currentNew.points || []), pos.x - currentNew.x, pos.y - currentNew.y];
     }
-
+    
+    newElementRef.current = updatedElement;
     setNewElement(updatedElement);
-  };
+  }, [activeTool, isDrawing, isSelecting, handleEraser]);
 
-  const handleMouseUp = async () => {
+  const handleMouseUp = useCallback(async () => {
     if (isSelecting) {
       const box = selectionBox;
       const x1 = Math.min(box.x, box.x + box.width);
@@ -225,7 +351,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       const y1 = Math.min(box.y, box.y + box.height);
       const y2 = Math.max(box.y, box.y + box.height);
 
-      const selected = elements.filter((el) => {
+      const selected = elementsRef.current.filter((el) => {
         const elX2 = el.x + (el.width || (el.radius || 0) * 2);
         const elY2 = el.y + (el.height || (el.radius || 0) * 2);
         return x1 < elX2 && x2 > el.x && y1 < elY2 && y2 > el.y;
@@ -237,33 +363,47 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    if (!isDrawing || !newElement) return;
-    setIsDrawing(false);
-
-    const finalElement = { ...newElement };
-    if (['rectangle', 'circle', 'triangle', 'diamond'].includes(finalElement.type)) {
-      const width = finalElement.width ?? 0;
-      const height = finalElement.height ?? 0;
-      if (width < 0) {
-        finalElement.x = finalElement.x + width;
-        finalElement.width = Math.abs(width);
+    if (activeTool === 'eraser' && isDrawing) {
+      setIsDrawing(false);
+      // For eraser, we want to save history only if something was deleted
+      if (eraserSnapshot && JSON.stringify(eraserSnapshot) !== JSON.stringify(elementsRef.current)) {
+        saveHistory(elementsRef.current, eraserSnapshot);
       }
-      if (height < 0) {
-        finalElement.y = finalElement.y + height;
-        finalElement.height = Math.abs(height);
-      }
+      setEraserSnapshot(null);
+      return;
     }
 
-    setElements(prev => [...prev, finalElement]);
-    await saveElement(finalElement);
+    if (!isDrawing) return;
+    setIsDrawing(false);
 
+    const currentNew = newElementRef.current;
+    if (currentNew) {
+      const finalElement = { ...currentNew };
+      if (['rectangle', 'circle', 'triangle', 'diamond'].includes(finalElement.type)) {
+        const width = finalElement.width ?? 0;
+        const height = finalElement.height ?? 0;
+        if (width < 0) {
+          finalElement.x = finalElement.x + width;
+          finalElement.width = Math.abs(width);
+        }
+        if (height < 0) {
+          finalElement.y = finalElement.y + height;
+          finalElement.height = Math.abs(height);
+        }
+      }
+
+      saveHistory([...elementsRef.current, finalElement]);
+    }
+    
+    newElementRef.current = null;
     setNewElement(null);
-  };
+  }, [isSelecting, selectionBox, activeTool, isDrawing, eraserSnapshot, saveHistory, setSelectedIds]);
 
-  const handleTransformEnd = async (e: any) => {
+  const handleTransformEnd = useCallback(async (e: any) => {
     const nodes = transformerRef.current?.nodes();
     if (!nodes) return;
-    const updatedElements = [...elements];
+    const currentElements = elementsRef.current;
+    const updatedElements = [...currentElements];
     for (const node of nodes) {
       const id = node.id();
       const index = updatedElements.findIndex((el) => el.id === id);
@@ -280,14 +420,11 @@ export const Canvas: React.FC<CanvasProps> = ({
         updatedElement.width = node.width() * node.scaleX();
         updatedElement.height = node.height() * node.scaleY();
       } else if (element.type === 'circle') {
-        // For Ellipse, width/height is 2 * radiusX/Y
         updatedElement.width = (node as any).radiusX() * 2 * node.scaleX();
         updatedElement.height = (node as any).radiusY() * 2 * node.scaleY();
-        // Reset x/y because our render logic adds radius to it
         updatedElement.x = node.x() - (updatedElement.width / 2);
         updatedElement.y = node.y() - (updatedElement.height / 2);
       } else if (element.type === 'triangle' || element.type === 'diamond') {
-        // For RegularPolygon, radius is width/2
         const baseRadius = (node as any).radius();
         updatedElement.width = baseRadius * 2 * node.scaleX();
         updatedElement.height = baseRadius * 2 * node.scaleY();
@@ -298,146 +435,28 @@ export const Canvas: React.FC<CanvasProps> = ({
       node.scaleX(1); 
       node.scaleY(1);
       updatedElements[index] = updatedElement;
-      await saveElement(updatedElement);
     }
-    setElements(updatedElements);
-  };
+    saveHistory(updatedElements);
+  }, [saveHistory]);
 
-  const handleDragEnd = async (e: any) => {
+  const handleDragEnd = useCallback(async (e: any) => {
     const id = e.target.id();
-    const element = elements.find((el) => el.id === id);
+    const currentElements = elementsRef.current;
+    const element = currentElements.find((el) => el.id === id);
     if (element) {
       let nx = e.target.x();
       let ny = e.target.y();
 
-      // Subtract half-width/height for center-based shapes to store top-left in DB
       if (element.type === 'circle' || element.type === 'triangle' || element.type === 'diamond') {
         nx -= (element.width || 0) / 2;
         ny -= (element.height || 0) / 2;
       }
 
       const updatedElement = { ...element, x: nx, y: ny };
-      setElements(prev => prev.map((el) => el.id === id ? updatedElement : el));
-      await saveElement(updatedElement);
+      const updatedElements = currentElements.map((el) => el.id === id ? updatedElement : el);
+      saveHistory(updatedElements);
     }
-  };
-
-  const handleTextInput = (x: number, y: number, id: string, initialText = '') => {
-    console.log('handleTextInput called at:', x, y, 'ID:', id);
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const existingTextarea = document.getElementById('whiteboard-textarea');
-    if (existingTextarea) {
-      existingTextarea.remove();
-    }
-
-    const stageBox = stage.container().getBoundingClientRect();
-    const textarea = document.createElement('textarea');
-    textarea.id = 'whiteboard-textarea';
-    document.body.appendChild(textarea);
-    
-    textarea.value = initialText;
-    textarea.style.position = 'absolute';
-
-    // Use Konva's transform to get exact screen coordinates
-    const absPos = stage.getAbsoluteTransform().point({ x, y });
-    const top = stageBox.top + absPos.y;
-    const left = stageBox.left + absPos.x;
-    const scale = stage.scaleX();
-
-    console.log('Textarea position:', { top, left, stageBoxTop: stageBox.top, stageBoxLeft: stageBox.left, absPosX: absPos.x, absPosY: absPos.y });
-
-    textarea.style.top = top + 'px';
-    textarea.style.left = left + 'px';
-    textarea.style.fontSize = `${(defaultProps.fontSize || 20) * scale}px`;
-    textarea.style.fontFamily = defaultProps.fontFamily || 'Sans-serif';
-    textarea.style.fontWeight = '500';
-    textarea.style.color = defaultProps.stroke || '#1e1e1e';
-    textarea.style.border = '2px solid #3b82f6';
-    textarea.style.outline = 'none';
-    textarea.style.zIndex = '9999'; // High z-index
-    textarea.style.background = 'white';
-    textarea.style.minWidth = '100px';
-    textarea.style.minHeight = '1.2em';
-    textarea.style.padding = '4px';
-    textarea.style.margin = '0';
-    textarea.style.display = 'block';
-    textarea.style.visibility = 'visible';
-    textarea.style.opacity = '1';
-    textarea.style.overflow = 'hidden';
-    textarea.style.resize = 'none';
-    textarea.style.lineHeight = '1.2';
-    textarea.style.whiteSpace = 'pre';
-    textarea.style.transformOrigin = 'top left';
-    textarea.style.transform = `scale(${scale})`;
-
-    setTimeout(() => {
-      textarea.focus();
-      console.log('Textarea focused');
-    }, 0);
-
-    let isFinished = false;
-    const finishText = async () => {
-      if (isFinished) return;
-      isFinished = true;
-      
-      console.log('finishText triggered');
-      const val = textarea.value;
-      const finalWidth = Math.max(textarea.offsetWidth / scale, 100);
-      const finalHeight = Math.max(textarea.offsetHeight / scale, 24);
-
-      if (document.body.contains(textarea)) {
-        console.log('Removing textarea from DOM');
-        document.body.removeChild(textarea);
-      }
-
-      if (val.trim()) {
-        const element: WhiteboardElement = {
-          id,
-          type: 'text',
-          x,
-          y,
-          text: val,
-          width: finalWidth,
-          height: finalHeight,
-          stroke: defaultProps.stroke || '#1e1e1e',
-          fill: 'transparent',
-          strokeWidth: 2,
-          rotation: 0,
-          strokeStyle: 'solid',
-          sloppiness: 1,
-          edges: 'sharp',
-          opacity: 1,
-          fontFamily: defaultProps.fontFamily || 'Sans-serif',
-          fontSize: defaultProps.fontSize || 20,
-          textAlign: defaultProps.textAlign || 'left',
-          ...defaultProps
-        } as WhiteboardElement;
-
-        console.log('Saving text element:', element);
-        setElements(prev => {
-          const existingIndex = prev.findIndex(el => el.id === id);
-          if (existingIndex !== -1) {
-            const newArr = [...prev];
-            newArr[existingIndex] = element;
-            return newArr;
-          }
-          return [...prev, element];
-        });
-        await saveElement(element);
-        setSelectedIds([id]);
-      }
-    };
-
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        finishText();
-      }
-    });
-    textarea.addEventListener('blur', finishText);
-  };
+  }, [saveHistory]);
 
   const [stageSize, setStageSize] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1000,
@@ -466,8 +485,8 @@ export const Canvas: React.FC<CanvasProps> = ({
 
       // DELETE / BACKSPACE
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
-        for (const id of selectedIds) await db.elements.delete(id);
-        setElements(prev => prev.filter(el => !selectedIds.includes(el.id)));
+        const newElements = elements.filter(el => !selectedIds.includes(el.id));
+        saveHistory(newElements);
         setSelectedIds([]);
         return;
       }
@@ -494,24 +513,15 @@ export const Canvas: React.FC<CanvasProps> = ({
           y: el.y + offset,
         }));
 
-        // Add to state and DB
-        setElements(prev => [...prev, ...newPastedElements]);
-        for (const el of newPastedElements) {
-          await saveElement(el);
-        }
-
-        // Select the newly pasted elements
+        saveHistory([...elements, ...newPastedElements]);
         setSelectedIds(newPastedElements.map(el => el.id));
-        
-        // Update clipboard for next paste (cumulative offset)
         setClipboard(newPastedElements);
-        console.log('Pasted', newPastedElements.length, 'elements');
         return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, elements, clipboard, setElements, setSelectedIds]);
+  }, [selectedIds, elements, clipboard, saveHistory, setSelectedIds]);
 
   const getDash = (style: string) => {
     if (style === 'dashed') return [10, 5];
@@ -535,6 +545,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               dash: getDash(el.strokeStyle),
               lineJoin: el.edges === 'round' ? 'round' : 'miter',
               lineCap: el.edges === 'round' ? 'round' : 'butt',
+              hitStrokeWidth: 10,
               draggable: (activeTool as string) === 'select',
               onDragEnd: handleDragEnd, onTransformEnd: handleTransformEnd,
               onClick: (e: any) => {
