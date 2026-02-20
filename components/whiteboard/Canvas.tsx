@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Stage, Layer, Rect, Circle, Text, Line, Transformer, RegularPolygon, Arrow, Image as KonvaImage } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Text, Line, Transformer, RegularPolygon, Arrow, Image as KonvaImage, Ellipse } from 'react-konva';
 import { nanoid } from 'nanoid';
 import { WhiteboardElement, db } from '@/lib/db';
 import { Tool } from './Toolbar';
@@ -162,9 +162,9 @@ export const Canvas: React.FC<CanvasProps> = ({
       textAlign: 'left',
       ...defaultProps,
       ...(activeTool === 'rectangle' && { width: 0, height: 0 }),
-      ...(activeTool === 'diamond' && { radius: 0 }),
-      ...(activeTool === 'circle' && { radius: 0 }),
-      ...(activeTool === 'triangle' && { radius: 0 }),
+      ...(activeTool === 'diamond' && { width: 0, height: 0 }),
+      ...(activeTool === 'circle' && { width: 0, height: 0 }),
+      ...(activeTool === 'triangle' && { width: 0, height: 0 }),
       ...(activeTool === 'line' && { points: [0, 0, 0, 0] }),
       ...(activeTool === 'arrow' && { points: [0, 0, 0, 0] }),
       ...(activeTool === 'pencil' && { points: [0, 0] }),
@@ -205,13 +205,9 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const updatedElement = { ...newElement };
 
-    if (activeTool === 'rectangle') {
+    if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'triangle' || activeTool === 'diamond') {
       updatedElement.width = pos.x - newElement.x;
       updatedElement.height = pos.y - newElement.y;
-    } else if (activeTool === 'circle' || activeTool === 'triangle' || activeTool === 'diamond') {
-      const dx = pos.x - newElement.x;
-      const dy = pos.y - newElement.y;
-      updatedElement.radius = Math.sqrt(dx * dx + dy * dy);
     } else if (activeTool === 'line' || activeTool === 'arrow') {
       updatedElement.points = [0, 0, pos.x - newElement.x, pos.y - newElement.y];
     } else if (activeTool === 'pencil') {
@@ -279,13 +275,28 @@ export const Canvas: React.FC<CanvasProps> = ({
         y: node.y(),
         rotation: node.rotation(),
       };
+
       if (element.type === 'rectangle' || element.type === 'text' || element.type === 'image') {
         updatedElement.width = node.width() * node.scaleX();
         updatedElement.height = node.height() * node.scaleY();
-      } else if (element.type === 'circle' || element.type === 'triangle' || element.type === 'diamond') {
-        updatedElement.radius = (node.width() * node.scaleX()) / 2;
+      } else if (element.type === 'circle') {
+        // For Ellipse, width/height is 2 * radiusX/Y
+        updatedElement.width = (node as any).radiusX() * 2 * node.scaleX();
+        updatedElement.height = (node as any).radiusY() * 2 * node.scaleY();
+        // Reset x/y because our render logic adds radius to it
+        updatedElement.x = node.x() - (updatedElement.width / 2);
+        updatedElement.y = node.y() - (updatedElement.height / 2);
+      } else if (element.type === 'triangle' || element.type === 'diamond') {
+        // For RegularPolygon, radius is width/2
+        const baseRadius = (node as any).radius();
+        updatedElement.width = baseRadius * 2 * node.scaleX();
+        updatedElement.height = baseRadius * 2 * node.scaleY();
+        updatedElement.x = node.x() - (updatedElement.width / 2);
+        updatedElement.y = node.y() - (updatedElement.height / 2);
       }
-      node.scaleX(1); node.scaleY(1);
+      
+      node.scaleX(1); 
+      node.scaleY(1);
       updatedElements[index] = updatedElement;
       await saveElement(updatedElement);
     }
@@ -485,9 +496,21 @@ export const Canvas: React.FC<CanvasProps> = ({
             };
 
             if (el.type === 'rectangle') return <Rect key={el.id} {...commonProps} width={el.width ?? 0} height={el.height ?? 0} cornerRadius={el.edges === 'round' ? 10 : 0} />;
-            if (el.type === 'circle') return <Circle key={el.id} {...commonProps} radius={el.radius ?? 0} />;
-            if (el.type === 'diamond') return <RegularPolygon key={el.id} {...commonProps} sides={4} radius={el.radius ?? 0} />;
-            if (el.type === 'triangle') return <RegularPolygon key={el.id} {...commonProps} sides={3} radius={el.radius ?? 0} />;
+            if (el.type === 'circle') {
+              const rw = Math.max(Math.abs(el.width ?? 0), 1);
+              const rh = Math.max(Math.abs(el.height ?? 0), 1);
+              return <Ellipse key={el.id} {...commonProps} radiusX={rw / 2} radiusY={rh / 2} x={el.x + rw / 2} y={el.y + rh / 2} />;
+            }
+            if (el.type === 'diamond') {
+              const rw = Math.max(Math.abs(el.width ?? 0), 1);
+              const rh = Math.max(Math.abs(el.height ?? 0), 1);
+              return <RegularPolygon key={el.id} {...commonProps} sides={4} radius={rw / 2} scaleY={rh / rw} x={el.x + rw / 2} y={el.y + rh / 2} />;
+            }
+            if (el.type === 'triangle') {
+              const rw = Math.max(Math.abs(el.width ?? 0), 1);
+              const rh = Math.max(Math.abs(el.height ?? 0), 1);
+              return <RegularPolygon key={el.id} {...commonProps} sides={3} radius={rw / 2} scaleY={rh / rw} x={el.x + rw / 2} y={el.y + rh / 2} />;
+            }
             if (el.type === 'line' || el.type === 'pencil') return <Line key={el.id} {...commonProps} points={el.points || []} tension={el.type === 'pencil' ? 0.5 : 0} />;
             if (el.type === 'arrow') return <Arrow key={el.id} {...commonProps} points={el.points || []} fill={el.stroke} pointerAtEnding={el.arrowheads} />;
             if (el.type === 'text') return <Text key={el.id} {...commonProps} fill={el.stroke} text={el.text ?? ''} fontSize={el.fontSize ?? 20} fontFamily={el.fontFamily ?? 'Sans-serif'} fontStyle="500" align={el.textAlign ?? 'left'} width={el.width ?? 0} height={el.height ?? 0} onDblClick={(e) => handleTextInput(el.x, el.y, el.id, el.text ?? '')} />;
@@ -507,8 +530,9 @@ export const Canvas: React.FC<CanvasProps> = ({
                 />
               )}
               {newElement.type === 'circle' && (
-                <Circle
-                  x={newElement.x} y={newElement.y} radius={newElement.radius ?? 0}
+                <Ellipse
+                  x={newElement.x + (newElement.width ?? 0) / 2} y={newElement.y + (newElement.height ?? 0) / 2} 
+                  radiusX={Math.abs((newElement.width ?? 0) / 2)} radiusY={Math.abs((newElement.height ?? 0) / 2)}
                   stroke={newElement.stroke} strokeWidth={newElement.strokeWidth}
                   fill={newElement.fill} opacity={newElement.opacity ?? 0.5}
                   dash={getDash(newElement.strokeStyle)}
@@ -516,7 +540,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               )}
               {newElement.type === 'triangle' && (
                 <RegularPolygon
-                  x={newElement.x} y={newElement.y} sides={3} radius={newElement.radius ?? 0}
+                  x={newElement.x + (newElement.width ?? 0) / 2} y={newElement.y + (newElement.height ?? 0) / 2} 
+                  sides={3} radius={Math.abs(newElement.width ?? 0) / 2} scaleY={Math.abs((newElement.height ?? 0) / (Math.abs(newElement.width ?? 0) || 1))}
                   stroke={newElement.stroke} strokeWidth={newElement.strokeWidth}
                   fill={newElement.fill} opacity={newElement.opacity ?? 0.5}
                   dash={getDash(newElement.strokeStyle)}
@@ -524,7 +549,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               )}
               {newElement.type === 'diamond' && (
                 <RegularPolygon
-                  x={newElement.x} y={newElement.y} sides={4} radius={newElement.radius ?? 0}
+                  x={newElement.x + (newElement.width ?? 0) / 2} y={newElement.y + (newElement.height ?? 0) / 2} 
+                  sides={4} radius={Math.abs(newElement.width ?? 0) / 2} scaleY={Math.abs((newElement.height ?? 0) / (Math.abs(newElement.width ?? 0) || 1))}
                   stroke={newElement.stroke} strokeWidth={newElement.strokeWidth}
                   fill={newElement.fill} opacity={newElement.opacity ?? 0.5}
                   dash={getDash(newElement.strokeStyle)}
