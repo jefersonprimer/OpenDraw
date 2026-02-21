@@ -130,7 +130,14 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const existingTextarea = document.getElementById('whiteboard-textarea');
     if (existingTextarea) {
-      existingTextarea.remove();
+      try {
+        // Check if element still has a parent before removing
+        if (existingTextarea.parentNode) {
+          existingTextarea.remove();
+        }
+      } catch (error) {
+        // Element may have already been removed, ignore error
+      }
     }
 
     const stageBox = stage.container().getBoundingClientRect();
@@ -150,15 +157,18 @@ export const Canvas: React.FC<CanvasProps> = ({
     textarea.style.left = left + 'px';
     textarea.style.fontSize = `${(defaultProps.fontSize || 20) * scale}px`;
     textarea.style.fontFamily = defaultProps.fontFamily || 'Sans-serif';
-    textarea.style.fontWeight = '500';
+    textarea.style.fontWeight = '400';
     textarea.style.color = defaultProps.stroke || '#1e1e1e';
-    textarea.style.border = '2px solid #3b82f6';
+    textarea.style.webkitFontSmoothing = 'antialiased';
+    textarea.style.mozOsxFontSmoothing = 'grayscale';
+    
+    textarea.style.boxSizing = 'border-box';
     textarea.style.outline = 'none';
     textarea.style.zIndex = '9999';
-    textarea.style.background = 'white';
-    textarea.style.minWidth = '100px';
+    textarea.style.background = 'transparent';
+    textarea.style.minWidth = '20px';
     textarea.style.minHeight = '1.2em';
-    textarea.style.padding = '4px';
+    textarea.style.padding = '0';
     textarea.style.margin = '0';
     textarea.style.display = 'block';
     textarea.style.visibility = 'visible';
@@ -170,6 +180,17 @@ export const Canvas: React.FC<CanvasProps> = ({
     textarea.style.transformOrigin = 'top left';
     textarea.style.transform = `scale(${scale})`;
 
+    const autoResize = () => {
+      textarea.style.width = '1px';
+      // Add 5px buffer to prevent clipping
+      textarea.style.width = (textarea.scrollWidth + 5) + 'px';
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    };
+
+    textarea.addEventListener('input', autoResize);
+    autoResize();
+
     setTimeout(() => {
       textarea.focus();
     }, 0);
@@ -180,11 +201,16 @@ export const Canvas: React.FC<CanvasProps> = ({
       isFinished = true;
       
       const val = textarea.value;
-      const finalWidth = Math.max(textarea.offsetWidth / scale, 100);
-      const finalHeight = Math.max(textarea.offsetHeight / scale, 24);
+      // Add 5px buffer before dividing by scale to prevent clipping
+      const finalWidth = Math.max((textarea.offsetWidth + 5) / scale, 5);
+      const finalHeight = Math.max((textarea.offsetHeight) / scale, 5);
 
-      if (document.body.contains(textarea)) {
-        document.body.removeChild(textarea);
+      try {
+        if (textarea.parentNode && document.body.contains(textarea)) {
+          document.body.removeChild(textarea);
+        }
+      } catch (error) {
+        // Element may have already been removed, ignore error
       }
 
       if (val.trim()) {
@@ -616,7 +642,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             }
             if (el.type === 'line' || el.type === 'pencil') return <Line key={el.id} {...commonProps} points={el.points || []} tension={el.type === 'pencil' ? 0.5 : 0} />;
             if (el.type === 'arrow') return <Arrow key={el.id} {...commonProps} points={el.points || []} fill={el.stroke} pointerAtEnding={el.arrowheads} />;
-            if (el.type === 'text') return <Text key={el.id} {...commonProps} fill={el.stroke} text={el.text ?? ''} fontSize={el.fontSize ?? 20} fontFamily={el.fontFamily ?? 'Sans-serif'} fontStyle="500" align={el.textAlign ?? 'left'} width={el.width ?? 0} height={el.height ?? 0} onDblClick={(e) => handleTextInput(el.x, el.y, el.id, el.text ?? '')} />;
+            if (el.type === 'text') return <Text key={el.id} {...commonProps} strokeWidth={0} fill={el.stroke} text={el.text ?? ''} fontSize={el.fontSize ?? 20} fontFamily={el.fontFamily ?? 'Sans-serif'} fontStyle="normal" lineHeight={1.2} align={el.textAlign ?? 'left'} width={el.width ?? 0} height={el.height ?? 0} onDblClick={(e) => handleTextInput(el.x, el.y, el.id, el.text ?? '')} />;
             if (el.type === 'image') return <ImageElement key={el.id} el={el} activeTool={activeTool} {...commonProps} />;
             return null;
           })}
