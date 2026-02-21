@@ -17,15 +17,20 @@ import {
   LogIn,
 } from "lucide-react"
 
-export default function Sidebar() {
+type SidebarProps = {
+  onOpenClick?: () => void;
+  onSaveClick?: () => void;
+}
+
+export default function Sidebar({ onOpenClick, onSaveClick }: SidebarProps) {
   return (
     <div className="w-60 max-h-[calc(100vh-80px)] bg-white border border-neutral-200 rounded-xl p-3 flex flex-col text-sm overflow-y-auto shadow-2xl">
       
       {/* Top Section */}
       <div className="space-y-1">
 
-        <MenuItem icon={<FolderOpen size={16} />} label="Open" shortcut="Ctrl+O" />
-        <MenuItem icon={<Save size={16} />} label="Save to..." />
+        <MenuItem icon={<FolderOpen size={16} />} label="Open" shortcut="Ctrl+O" onClick={onOpenClick} />
+        <MenuItem icon={<Save size={16} />} label="Save to..." onClick={onSaveClick} />
         <MenuItem icon={<ImageIcon size={16} />} label="Export image..." shortcut="Ctrl+Shift+E" />
         <MenuItem icon={<Users size={16} />} label="Live collaboration..." />
         <MenuItem icon={<Command size={16} />} label="Command palette" shortcut="Ctrl+/" highlight />
@@ -104,11 +109,13 @@ type MenuItemProps = {
   shortcut?: string
   highlight?: boolean
   isResetCanvas?: boolean
+  onClick?: () => void
 }
 
-function MenuItem({ icon, label, shortcut, highlight, isResetCanvas }: MenuItemProps) {
+function MenuItem({ icon, label, shortcut, highlight, isResetCanvas, onClick }: MenuItemProps) {
   return (
     <div
+      onClick={onClick}
       className={`
         flex items-center justify-between px-2 py-2 rounded-md cursor-pointer
         hover:bg-neutral-100 text-[#1b1b1f]

@@ -8,6 +8,8 @@ import { db, WhiteboardElement } from '@/lib/db';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { Plus, Minus, Undo2, Redo2, ShieldCheck, HelpCircle, Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
+import { SaveModal } from './SaveModal';
+import { OpenModal } from './OpenModal';
 
 const Canvas = dynamic(() => import('./Canvas').then((mod) => mod.Canvas), {
   ssr: false,
@@ -22,6 +24,8 @@ export default function Whiteboard() {
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isOpenModalOpen, setIsOpenModalOpen] = useState(false);
   const [defaultProps, setDefaultProps] = useState<Partial<WhiteboardElement>>({
     stroke: '#1e1e1e',
     fill: 'transparent',
@@ -119,6 +123,11 @@ export default function Whiteboard() {
         e.preventDefault();
         redo();
       }
+      // Open: Ctrl+O
+      else if (isCtrl && key === 'o') {
+        e.preventDefault();
+        setIsOpenModalOpen(true);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -129,6 +138,10 @@ export default function Whiteboard() {
     if (confirm('Are you sure you want to clear the entire canvas?')) {
       saveHistory([]);
     }
+  }, [saveHistory]);
+
+  const handleReplaceElements = useCallback((newElements: WhiteboardElement[]) => {
+    saveHistory(newElements);
   }, [saveHistory]);
 
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,9 +239,25 @@ export default function Whiteboard() {
               : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
           }`}
         >
-          <Sidebar />
+          <Sidebar 
+            onOpenClick={() => setIsOpenModalOpen(true)}
+            onSaveClick={() => setIsSaveModalOpen(true)}
+          />
         </div>
       </div>
+
+      {/* Modals */}
+      <SaveModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        elements={elements}
+      />
+      <OpenModal
+        isOpen={isOpenModalOpen}
+        onClose={() => setIsOpenModalOpen(false)}
+        currentElements={elements}
+        onReplace={handleReplaceElements}
+      />
 
       <Toolbar 
         activeTool={activeTool} 
