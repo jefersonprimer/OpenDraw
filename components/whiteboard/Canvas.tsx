@@ -18,6 +18,7 @@ interface CanvasProps {
   selectedIds: string[];
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   defaultProps: Partial<WhiteboardElement>;
+  zoom: number;
 }
 
 const ImageElement = ({ el, activeTool, onDragEnd, onTransformEnd, onClick }: any) => {
@@ -50,7 +51,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   redo,
   selectedIds,
   setSelectedIds,
-  defaultProps
+  defaultProps,
+  zoom
 }) => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -470,6 +472,42 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, []);
 
   useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const stage = stageRef.current;
+        if (!stage) return;
+
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return;
+
+        const oldScale = stage.scaleX();
+        const mousePointTo = {
+          x: (pointer.x - stage.x()) / oldScale,
+          y: (pointer.y - stage.y()) / oldScale,
+        };
+
+        const scaleBy = 1.1;
+        const newScale = e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+        const clampedScale = Math.min(Math.max(0.1, newScale), 5);
+        
+        // Update zoom state in parent via a custom event since we can't easily call setZoom here
+        window.dispatchEvent(new CustomEvent('update-zoom', { detail: { zoom: clampedScale } }));
+
+        const newPos = {
+          x: pointer.x - mousePointTo.x * clampedScale,
+          y: pointer.y - mousePointTo.y * clampedScale,
+        };
+        stage.position(newPos);
+      }
+    };
+
+    const container = stageRef.current?.container();
+    container?.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container?.removeEventListener('wheel', handleWheel);
+  }, [zoom]);
+
+  useEffect(() => {
     if (transformerRef.current) {
       const nodes = selectedIds.map(id => stageRef.current?.findOne('#' + id)).filter(Boolean);
       transformerRef.current.nodes(nodes as Konva.Node[]);
@@ -535,6 +573,8 @@ export const Canvas: React.FC<CanvasProps> = ({
         width={stageSize.width} height={stageSize.height}
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
         ref={stageRef} draggable={(activeTool as string) === 'hand'}
+        scaleX={zoom}
+        scaleY={zoom}
         style={{ cursor: activeTool === 'hand' ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair' }}
       >
         <Layer>

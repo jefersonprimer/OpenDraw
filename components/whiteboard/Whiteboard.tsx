@@ -6,6 +6,7 @@ import { Toolbar, Tool } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { db, WhiteboardElement } from '@/lib/db';
 import { useHistoryState } from '@/lib/useHistoryState';
+import { Plus, Minus } from 'lucide-react';
 
 const Canvas = dynamic(() => import('./Canvas').then((mod) => mod.Canvas), {
   ssr: false,
@@ -16,6 +17,7 @@ export default function Whiteboard() {
   const { elements, setElements, saveHistory, undo, redo, canUndo, canRedo } = useHistoryState([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [defaultProps, setDefaultProps] = useState<Partial<WhiteboardElement>>({
     stroke: '#1e1e1e',
     fill: 'transparent',
@@ -30,6 +32,14 @@ export default function Whiteboard() {
     fontSize: 20,
     textAlign: 'left',
   });
+
+  useEffect(() => {
+    const handleUpdateZoom = (e: any) => {
+      setZoom(e.detail.zoom);
+    };
+    window.addEventListener('update-zoom', handleUpdateZoom);
+    return () => window.removeEventListener('update-zoom', handleUpdateZoom);
+  }, []);
 
   useEffect(() => {
     const loadElements = async () => {
@@ -165,6 +175,7 @@ export default function Whiteboard() {
         selectedIds={selectedIds}
         setSelectedIds={setSelectedIds}
         defaultProps={defaultProps}
+        zoom={zoom}
       />
       {(selectedIds.length > 0 || isDrawingTool) && (
         <PropertiesPanel 
@@ -174,6 +185,27 @@ export default function Whiteboard() {
           onLayerChange={handleLayerChange}
         />
       )}
+
+      {/* Zoom Control */}
+      <div className="fixed bottom-4 left-4 flex items-center bg-white border border-gray-200 rounded-lg shadow-lg p-1 gap-2 z-50">
+        <button
+          onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}
+          className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
+          title="Zoom Out"
+        >
+          <Minus size={16} />
+        </button>
+        <div className="w-12 text-center text-sm font-medium text-gray-700 select-none">
+          {Math.round(zoom * 100)}%
+        </div>
+        <button
+          onClick={() => setZoom(Math.min(5, zoom + 0.1))}
+          className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
+          title="Zoom In"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
     </div>
   );
 }
