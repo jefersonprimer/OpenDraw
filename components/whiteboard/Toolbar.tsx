@@ -1,5 +1,5 @@
 import React from 'react';
-import { Hand, MousePointer2, Square, Circle, Type, Minus, Triangle, ArrowRight, Pencil, Image as ImageIcon, Eraser, Diamond, Undo2, Redo2, Trash2 } from 'lucide-react';
+import { Hand, MousePointer2, Square, Circle, Type, Minus, Triangle, ArrowRight, Pencil, Image as ImageIcon, Eraser, Diamond, Trash2 } from 'lucide-react';
 
 export type Tool = 'hand' | 'select' | 'rectangle' | 'diamond' | 'triangle' | 'circle' | 'arrow' | 'line' | 'pencil' | 'text' | 'image' | 'eraser';
 
@@ -8,10 +8,6 @@ interface ToolbarProps {
   setActiveTool: (tool: Tool) => void;
   onClearCanvas: () => void;
   onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
 }
 
 const tools: { id: Tool; icon: React.ReactNode; label: string; isAction?: boolean }[] = [
@@ -33,11 +29,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   activeTool, 
   setActiveTool, 
   onClearCanvas, 
-  onImageUpload,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo
+  onImageUpload
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -51,25 +43,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-lg shadow-lg p-1 flex gap-1 z-50 overflow-x-auto max-w-[95vw] items-center">
-      <div className="flex gap-1 border-r pr-1 mr-1">
-        <button
-          onClick={onUndo}
-          disabled={!canUndo}
-          className={`p-2 rounded-md transition-colors ${canUndo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo2 size={18} />
-        </button>
-        <button
-          onClick={onRedo}
-          disabled={!canRedo}
-          className={`p-2 rounded-md transition-colors ${canRedo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
-          title="Redo (Ctrl+R / Ctrl+Y)"
-        >
-          <Redo2 size={18} />
-        </button>
-      </div>
-
       {tools.map((tool) => (
         <button
           key={tool.id}

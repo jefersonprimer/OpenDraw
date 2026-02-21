@@ -6,7 +6,7 @@ import { Toolbar, Tool } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { db, WhiteboardElement } from '@/lib/db';
 import { useHistoryState } from '@/lib/useHistoryState';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, Undo2, Redo2 } from 'lucide-react';
 
 const Canvas = dynamic(() => import('./Canvas').then((mod) => mod.Canvas), {
   ssr: false,
@@ -160,10 +160,6 @@ export default function Whiteboard() {
         setActiveTool={setActiveTool} 
         onClearCanvas={handleClearCanvas}
         onImageUpload={handleImageUpload}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={undo}
-        onRedo={redo}
       />
       <Canvas 
         activeTool={activeTool} 
@@ -186,25 +182,48 @@ export default function Whiteboard() {
         />
       )}
 
-      {/* Zoom Control */}
-      <div className="fixed bottom-4 left-4 flex items-center bg-white border border-gray-200 rounded-lg shadow-lg p-1 gap-2 z-50">
-        <button
-          onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}
-          className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-          title="Zoom Out"
-        >
-          <Minus size={16} />
-        </button>
-        <div className="w-12 text-center text-sm font-medium text-gray-700 select-none">
-          {Math.round(zoom * 100)}%
+      {/* Bottom Left Controls */}
+      <div className="fixed bottom-4 left-4 flex items-center gap-2 z-50">
+        {/* Zoom Control */}
+        <div className="flex items-center bg-white border border-gray-200 rounded-lg shadow-lg p-1 gap-2">
+          <button
+            onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}
+            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
+            title="Zoom Out"
+          >
+            <Minus size={16} />
+          </button>
+          <div className="w-12 text-center text-sm font-medium text-gray-700 select-none">
+            {Math.round(zoom * 100)}%
+          </div>
+          <button
+            onClick={() => setZoom(Math.min(5, zoom + 0.1))}
+            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
+            title="Zoom In"
+          >
+            <Plus size={16} />
+          </button>
         </div>
-        <button
-          onClick={() => setZoom(Math.min(5, zoom + 0.1))}
-          className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 transition-colors"
-          title="Zoom In"
-        >
-          <Plus size={16} />
-        </button>
+
+        {/* Undo/Redo Control */}
+        <div className="flex items-center bg-white border border-gray-200 rounded-lg shadow-lg p-1 gap-1">
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            className={`p-1.5 rounded-md transition-colors ${canUndo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 size={16} />
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            className={`p-1.5 rounded-md transition-colors ${canRedo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
+            title="Redo (Ctrl+R / Ctrl+Y)"
+          >
+            <Redo2 size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
