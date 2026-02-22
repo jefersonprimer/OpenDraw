@@ -44,7 +44,7 @@ export default function Sidebar({ onOpenClick, onSaveClick, onResetCanvas, canva
   };
 
   return (
-    <div className="w-60 max-h-[calc(100vh-80px)] bg-white dark:bg-[#1C1C1C] border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 flex flex-col text-sm overflow-y-auto shadow-2xl">
+    <div className="w-68 max-h-[calc(100vh-80px)] bg-white dark:bg-[#1C1C1C] border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 flex flex-col text-sm overflow-y-auto shadow-2xl">
 
       {/* Top Section */}
       <div className="space-y-1">
