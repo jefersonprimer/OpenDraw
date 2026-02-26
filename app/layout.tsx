@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Primer - Whiteboard",
+  title: "OpenDraw Whiteboard",
   description: "create by Primer",
 };
 
