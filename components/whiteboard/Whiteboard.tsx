@@ -2,18 +2,22 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Toolbar, Tool } from './Toolbar';
+import { Toolbar, Tool, ExtraTool } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { db, WhiteboardElement } from '@/lib/db';
 import { useHistoryState } from '@/lib/useHistoryState';
-import { Plus, Minus, Undo2, Redo2, ShieldCheck, HelpCircle, Menu, X } from 'lucide-react';
+import { Plus, Minus, Undo2, Redo2, ShieldCheck, HelpCircle, Menu, X, Share2, PanelRight } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useTheme } from '@/app/contexts/ThemeContext';
+
 import { SaveModal } from './SaveModal';
 import { OpenModal } from './OpenModal';
 import { ClearCanvasModal } from './ClearCanvasModal';
 import { ShortcutsModal } from './ShortcutsModal';
-import { getElementsFromHash } from '@/lib/fileService';
+import LiveCollaborationModal from './LiveCollaborationModal';
+import { ShareLinkModal } from './ShareLinkModal';
+
+import { getElementsFromHash, getShareableLink } from '@/lib/fileService';
 
 const Canvas = dynamic(() => import('./Canvas').then((mod) => mod.Canvas), {
   ssr: false,
@@ -21,6 +25,7 @@ const Canvas = dynamic(() => import('./Canvas').then((mod) => mod.Canvas), {
 
 export default function Whiteboard() {
   const [activeTool, setActiveTool] = useState<Tool>('select');
+  const [activeExtraTool, setActiveExtraTool] = useState<ExtraTool>('none');
   const { elements, setElements, saveHistory, undo, redo, canUndo, canRedo } = useHistoryState([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -32,9 +37,11 @@ export default function Whiteboard() {
   const [isOpenModalOpen, setIsOpenModalOpen] = useState(false);
   const [isClearCanvasModalOpen, setIsClearCanvasModalOpen] = useState(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+  const [isLiveCollaborationModalOpen, setIsLiveCollaborationModalOpen] = useState(false);
+  const [isShareLinkModalOpen, setIsShareLinkModalOpen] = useState(false);
+  const [shareLink, setShareLink] = useState('');
   const [elementsFromHash, setElementsFromHash] = useState<WhiteboardElement[] | null>(null);
-  // Must use same initial value on server and client to avoid hydration mismatch (Next.js reverts on mismatch)
-  const [canvasBackground, setCanvasBackground] = useState('bg-gray-50');
+  const [canvasBackground, setCanvasBackground] = useState<string>('bg-gray-50');
   const [defaultProps, setDefaultProps] = useState<Partial<WhiteboardElement>>({
     stroke: '#1e1e1e',
     fill: 'transparent',
@@ -59,16 +66,14 @@ export default function Whiteboard() {
     elementsRef.current = elements;
   }, [elements]);
 
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme, mounted } = useTheme();
   const LIGHT_BG = ['bg-white', 'bg-gray-50', 'bg-neutral-100', 'bg-neutral-200', 'bg-neutral-300', 'bg-yellow-100'];
   const DARK_BG = ['bg-neutral-900', 'bg-gray-800', 'bg-slate-900', 'bg-zinc-900', 'bg-gray-950', 'bg-stone-950'];
 
-  // Load saved view state from localStorage
+  // Load saved view state from localStorage (zoom/position)
   useEffect(() => {
     const savedZoom = localStorage.getItem('whiteboard-zoom');
     const savedPosition = localStorage.getItem('whiteboard-position');
-    const savedBackground = localStorage.getItem('whiteboard-background');
-
     if (savedZoom) {
       const zoomValue = parseFloat(savedZoom);
       if (!isNaN(zoomValue) && zoomValue >= 0.1 && zoomValue <= 5) {
@@ -86,27 +91,33 @@ export default function Whiteboard() {
         // Invalid JSON, ignore
       }
     }
-
-    if (savedBackground) {
-      setCanvasBackground(savedBackground);
-    } else {
-      // No saved background: use theme-appropriate default
-      const isDark = document.documentElement.classList.contains('dark');
-      setCanvasBackground(isDark ? 'bg-neutral-900' : 'bg-gray-50');
-      localStorage.setItem('whiteboard-background', isDark ? 'bg-neutral-900' : 'bg-gray-50');
-    }
   }, []);
 
-  // Sync canvas background when theme changes (e.g. light bg in dark mode → switch to dark default)
+  // Sync canvas background when theme changes:
+  // - always switch between light/dark defaults
+  // - but remember the last background chosen for each theme separately
   useEffect(() => {
-    if (resolvedTheme === 'dark' && LIGHT_BG.includes(canvasBackground)) {
-      setCanvasBackground('bg-neutral-900');
-      localStorage.setItem('whiteboard-background', 'bg-neutral-900');
-    } else if (resolvedTheme === 'light' && DARK_BG.includes(canvasBackground)) {
-      setCanvasBackground('bg-gray-50');
-      localStorage.setItem('whiteboard-background', 'bg-gray-50');
+    if (!mounted) return;
+
+    const key =
+      resolvedTheme === 'dark'
+        ? 'whiteboard-background-dark'
+        : 'whiteboard-background-light';
+
+    const savedPerTheme = localStorage.getItem(key);
+
+    if (savedPerTheme) {
+      setCanvasBackground(savedPerTheme);
+      return;
     }
-  }, [resolvedTheme, canvasBackground]);
+
+    // No saved background yet for this theme: pick a sensible default
+    if (resolvedTheme === 'dark') {
+      setCanvasBackground('bg-neutral-900');
+    } else {
+      setCanvasBackground('bg-gray-50');
+    }
+  }, [resolvedTheme, mounted]);
 
   // Default stroke: black in light mode, white in dark mode (figures, arrow, line, text visible on canvas)
   useEffect(() => {
@@ -294,14 +305,18 @@ export default function Whiteboard() {
   const handleCanvasBackgroundChange = useCallback((color: string) => {
     setCanvasBackground(color);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('whiteboard-background', color);
+      const key =
+        resolvedTheme === 'dark'
+          ? 'whiteboard-background-dark'
+          : 'whiteboard-background-light';
+      localStorage.setItem(key, color);
     }
-  }, []);
+  }, [resolvedTheme]);
 
   return (
     <div className={`relative w-full h-screen ${canvasBackground} overflow-hidden`}>
       {/* Menu Button */}
-      <div className="fixed top-4 left-4 z-[100]">
+      <div className="fixed top-4 left-4 z-100">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="p-2.5 bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white transition-all active:scale-95"
@@ -311,9 +326,30 @@ export default function Whiteboard() {
         </button>
       </div>
 
+
+      <div className="fixed top-4 right-4 z-100 space-x-2">
+        <button
+          onClick={() => {
+            setShareLink(getShareableLink(elements));
+            setIsShareLinkModalOpen(true);
+          }}
+          className="p-2.5 bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white transition-all active:scale-95"
+          title="Share"
+        >
+          <Share2 size={20} />
+        </button>
+
+        <button
+          className="p-2.5 bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-white transition-all active:scale-95"
+          title="Libary"
+        >
+          <PanelRight size={20} />
+        </button>
+      </div>
+
       {/* Sidebar Overlay and Sidebar */}
       <div
-        className={`fixed inset-0 z-[90] transition-opacity duration-200 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 z-90 transition-opacity duration-200 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <div
           className="absolute inset-0 bg-transparent"
@@ -322,8 +358,8 @@ export default function Whiteboard() {
         <div
           ref={sidebarRef}
           className={`absolute top-16 left-4  transition-all duration-200 ease-out origin-top-left ${isSidebarOpen
-              ? 'opacity-100 scale-100 translate-y-0'
-              : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+            ? 'opacity-100 scale-100 translate-y-0'
+            : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
             }`}
         >
           <Sidebar
@@ -332,6 +368,7 @@ export default function Whiteboard() {
             onResetCanvas={handleClearCanvas}
             canvasBackground={canvasBackground}
             onCanvasBackgroundChange={handleCanvasBackgroundChange}
+            onLiveCollaborationClick={() => setIsLiveCollaborationModalOpen(true)}
           />
         </div>
       </div>
@@ -358,6 +395,15 @@ export default function Whiteboard() {
         isOpen={isShortcutsModalOpen}
         onClose={() => setIsShortcutsModalOpen(false)}
       />
+      <LiveCollaborationModal
+        isOpen={isLiveCollaborationModalOpen}
+        onClose={() => setIsLiveCollaborationModalOpen(false)}
+      />
+      <ShareLinkModal
+        isOpen={isShareLinkModalOpen}
+        onClose={() => setIsShareLinkModalOpen(false)}
+        link={shareLink}
+      />
 
       <Toolbar
         activeTool={activeTool}
@@ -365,9 +411,12 @@ export default function Whiteboard() {
         onClearCanvas={handleClearCanvas}
         onImageUpload={handleImageUpload}
         onHelpClick={() => setIsShortcutsModalOpen(true)}
+        activeExtraTool={activeExtraTool}
+        setActiveExtraTool={setActiveExtraTool}
       />
       <Canvas
         activeTool={activeTool}
+        extraTool={activeExtraTool}
         elements={elements}
         setElements={setElements}
         saveHistory={saveHistory}

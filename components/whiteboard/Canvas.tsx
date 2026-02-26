@@ -1,13 +1,153 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Stage, Layer, Rect, Circle, Text, Line, Transformer, RegularPolygon, Arrow, Image as KonvaImage, Ellipse, Shape, Group } from 'react-konva';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Stage, Layer, Rect, Circle, Text, Line, Transformer, RegularPolygon, Arrow, Image as KonvaImage, Ellipse, Shape, Group, Path } from 'react-konva';
 import { nanoid } from 'nanoid';
 import { WhiteboardElement, db } from '@/lib/db';
-import { Tool } from './Toolbar';
+import { Tool, ExtraTool } from './Toolbar';
 import Konva from 'konva';
 import useImage from 'use-image';
 import { useTheme } from '@/app/contexts/ThemeContext';
+
+function detectUrlType(url: string): 'image' | 'video' | 'youtube' | 'vimeo' | 'unknown' {
+  const trimmedUrl = url.trim().toLowerCase();
+
+  if (trimmedUrl.startsWith('data:image/')) return 'image';
+
+  // Regex mais flexível para imagens: busca extensão seguida de fim de string, query param ou barra
+  if (trimmedUrl.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|\/|$)/i)) return 'image';
+
+  if (trimmedUrl.match(/\.(mp4|webm|ogg)(\?|\/|$)/i)) return 'video';
+  if (trimmedUrl.includes('youtube.com') || trimmedUrl.includes('youtu.be')) return 'youtube';
+  if (trimmedUrl.includes('vimeo.com')) return 'vimeo';
+  if (
+    trimmedUrl.includes('imgur.com') ||
+    trimmedUrl.includes('i.redd.it') ||
+    trimmedUrl.includes('media.giphy.com') ||
+    trimmedUrl.includes('images.unsplash.com') ||
+    trimmedUrl.includes('images.pexels.com') ||
+    trimmedUrl.includes('pixabay.com') ||
+    trimmedUrl.includes('gstatic.com') ||
+    trimmedUrl.includes('googleusercontent.com') ||
+    trimmedUrl.includes('fbcdn.net') ||
+    trimmedUrl.includes('akamaihd.net') ||
+    trimmedUrl.includes('cloudinary.com') ||
+    trimmedUrl.includes('twimg.com') ||
+    trimmedUrl.includes('pbs.twimg.com') ||
+    trimmedUrl.includes('i.pinimg.com') ||
+    trimmedUrl.includes('cdn.discordapp.com') ||
+    trimmedUrl.includes('wp.com') ||
+    trimmedUrl.includes('wordpress.com') ||
+    trimmedUrl.includes('imgs.search.brave.com') ||
+    trimmedUrl.includes('search.brave.com') ||
+    trimmedUrl.includes('media.tenor.com') ||
+    trimmedUrl.includes('upload.wikimedia.org') ||
+    trimmedUrl.includes('live.staticflickr.com') ||
+    trimmedUrl.includes('img.freepik.com') ||
+    trimmedUrl.includes('images.rawpixel.com') ||
+    trimmedUrl.includes('assets.imgix.net') ||
+    trimmedUrl.includes('cdn.shopify.com') ||
+    trimmedUrl.includes('images.squarespace-cdn.com') ||
+    trimmedUrl.includes('media2.giphy.com') ||
+    trimmedUrl.includes('c.tenor.com')
+  ) return 'image';
+
+  return 'unknown';
+}
+
+function getYoutubeId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+  return match ? match[1] : null;
+}
+
+function getVimeoId(url: string): string | null {
+  const match = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/);
+  return match ? match[1] : null;
+}
+
+interface WebEmbedMediaProps {
+  url: string;
+  width: number;
+  height: number;
+}
+
+const WebEmbedImage: React.FC<WebEmbedMediaProps> = ({ url, width, height }) => {
+  const [image] = useImage(url, 'anonymous');
+  const imageWidth = width - 20;
+  const imageHeight = height - 20;
+
+  if (!image) {
+    return (
+      <Group x={10} y={10}>
+        <Rect
+          width={imageWidth}
+          height={imageHeight}
+          fill="#1f2937"
+          cornerRadius={5}
+        />
+        <Text
+          width={imageWidth}
+          height={imageHeight}
+          text={`Imagem: ${url.slice(0, 30)}...`}
+          fontSize={12}
+          fill="#9ca3af"
+          align="center"
+          verticalAlign="middle"
+        />
+      </Group>
+    );
+  }
+
+  const imgRatio = image.width / image.height;
+  const containerRatio = imageWidth / imageHeight;
+  let drawWidth = imageWidth;
+  let drawHeight = imageHeight;
+
+  if (imgRatio > containerRatio) {
+    drawHeight = imageWidth / imgRatio;
+  } else {
+    drawWidth = imageHeight * imgRatio;
+  }
+
+  const xOffset = (imageWidth - drawWidth) / 2;
+  const yOffset = (imageHeight - drawHeight) / 2;
+
+  return (
+    <KonvaImage
+      x={10 + xOffset}
+      y={10 + yOffset}
+      width={drawWidth}
+      height={drawHeight}
+      image={image}
+    />
+  );
+};
+
+// These Konva components render transparent placeholders — actual content
+// is rendered via the HTML overlay layer below the canvas wrapper.
+const WebEmbedYoutube: React.FC<WebEmbedMediaProps> = ({ url, width, height }) => {
+  const contentWidth = width - 20;
+  const contentHeight = height - 20;
+  return (
+    <Rect x={10} y={10} width={contentWidth} height={contentHeight} fill="transparent" />
+  );
+};
+
+const WebEmbedVimeo: React.FC<WebEmbedMediaProps> = ({ url, width, height }) => {
+  const contentWidth = width - 20;
+  const contentHeight = height - 20;
+  return (
+    <Rect x={10} y={10} width={contentWidth} height={contentHeight} fill="transparent" />
+  );
+};
+
+const WebEmbedVideo: React.FC<WebEmbedMediaProps> = ({ url, width, height }) => {
+  const contentWidth = width - 20;
+  const contentHeight = height - 20;
+  return (
+    <Rect x={10} y={10} width={contentWidth} height={contentHeight} fill="transparent" />
+  );
+};
 
 const DEFAULT_STROKE_LIGHT = '#000000';
 const DEFAULT_STROKE_DARK = '#ffffff';
@@ -258,8 +398,26 @@ function createJitteredPolyline(points: number[], sloppiness: number, seed: stri
   return out;
 }
 
+function pointInPolygon(x: number, y: number, flatPoints: number[]): boolean {
+  if (flatPoints.length < 6) return false;
+  let inside = false;
+  for (let i = 0, j = flatPoints.length - 2; i < flatPoints.length; i += 2) {
+    const xi = flatPoints[i];
+    const yi = flatPoints[i + 1];
+    const xj = flatPoints[j];
+    const yj = flatPoints[j + 1];
+    const intersect =
+      (yi > y) !== (yj > y) &&
+      x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-9) + xi;
+    if (intersect) inside = !inside;
+    j = i;
+  }
+  return inside;
+}
+
 interface CanvasProps {
   activeTool: Tool;
+  extraTool: ExtraTool;
   elements: WhiteboardElement[];
   setElements: React.Dispatch<React.SetStateAction<WhiteboardElement[]>>;
   saveHistory: (newElements: WhiteboardElement[], customPastState?: WhiteboardElement[]) => void;
@@ -275,7 +433,7 @@ interface CanvasProps {
 }
 
 const ImageElement = ({ el, activeTool, onDragEnd, onTransformEnd, onClick }: any) => {
-  const [img] = useImage(el.src);
+  const [img] = useImage(el.src, 'anonymous');
   return (
     <KonvaImage
       id={el.id}
@@ -297,6 +455,7 @@ const ImageElement = ({ el, activeTool, onDragEnd, onTransformEnd, onClick }: an
 
 export const Canvas: React.FC<CanvasProps> = ({
   activeTool,
+  extraTool,
   elements,
   setElements,
   saveHistory,
@@ -324,11 +483,21 @@ export const Canvas: React.FC<CanvasProps> = ({
   const transformerRef = useRef<Konva.Transformer>(null);
   const [draggingControlPoint, setDraggingControlPoint] = useState<{ elementId: string; pointIndex: number } | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [interactingEmbedId, setInteractingEmbedId] = useState<string | null>(null);
 
   const elementsRef = useRef(elements);
   useEffect(() => {
     elementsRef.current = elements;
   }, [elements]);
+
+  const [laserPoints, setLaserPoints] = useState<number[]>([]);
+  const [isLaserActive, setIsLaserActive] = useState(false);
+  const laserTimeoutRef = useRef<number | null>(null);
+  const laserMaxPoints = 40;
+  const [laserCursorPos, setLaserCursorPos] = useState<{ x: number; y: number } | null>(null);
+
+  const [lassoPoints, setLassoPoints] = useState<number[]>([]);
+  const [isLassoing, setIsLassoing] = useState(false);
 
   useEffect(() => {
     const handleAddImage = async (e: any) => {
@@ -534,10 +703,96 @@ export const Canvas: React.FC<CanvasProps> = ({
   }, [defaultProps, saveHistory, setSelectedIds]);
 
   const handleMouseDown = useCallback((e: any) => {
-    if (activeTool === 'hand') return;
-
     const stage = e.target.getStage();
     const pos = getRelativePointerPosition(stage);
+
+    if (extraTool === 'laser-pointer') {
+      setIsLaserActive(true);
+      setLaserPoints([pos.x, pos.y]);
+      if (laserTimeoutRef.current != null) {
+        window.clearTimeout(laserTimeoutRef.current);
+        laserTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (extraTool === 'lasso-selection') {
+      setIsLassoing(true);
+      setLassoPoints([pos.x, pos.y]);
+      setIsSelecting(false);
+      return;
+    }
+
+    if (extraTool === 'frame') {
+      const id = nanoid();
+      const element: WhiteboardElement = {
+        id,
+        type: 'frame',
+        x: pos.x,
+        y: pos.y,
+        stroke: defaultProps.stroke ?? (isDark ? DEFAULT_STROKE_DARK : DEFAULT_STROKE_LIGHT),
+        fill: 'transparent',
+        strokeWidth: 2,
+        rotation: 0,
+        strokeStyle: 'dashed',
+        sloppiness: 0,
+        edges: 'sharp',
+        opacity: 1,
+        arrowType: 'simple',
+        arrowheads: false,
+        arrowBreakPoints: 3,
+        arrowheadTail: false,
+        arrowheadStyle: 'triangle',
+        fontFamily: 'Sans-serif',
+        fontSize: 20,
+        textAlign: 'left',
+        ...defaultProps,
+        width: 0,
+        height: 0,
+      };
+      setIsDrawing(true);
+      newElementRef.current = element;
+      setNewElement(element);
+      setSelectedIds([id]);
+      return;
+    }
+
+    if (extraTool === 'web-embed') {
+      const url = typeof window !== 'undefined' ? window.prompt('Cole a URL que deseja embedar') : null;
+      if (!url) return;
+      const id = nanoid();
+      const element: WhiteboardElement = {
+        id,
+        type: 'web-embed',
+        x: pos.x,
+        y: pos.y,
+        width: 400,
+        height: 250,
+        text: url,
+        stroke: defaultProps.stroke ?? (isDark ? DEFAULT_STROKE_DARK : DEFAULT_STROKE_LIGHT),
+        fill: isDark ? '#020617' : '#f9fafb',
+        strokeWidth: 2,
+        rotation: 0,
+        strokeStyle: 'solid',
+        sloppiness: 0,
+        edges: 'sharp',
+        opacity: 1,
+        arrowType: 'simple',
+        arrowheads: false,
+        arrowBreakPoints: 3,
+        arrowheadTail: false,
+        arrowheadStyle: 'triangle',
+        fontFamily: 'Sans-serif',
+        fontSize: 14,
+        textAlign: 'left',
+        ...defaultProps,
+      };
+      saveHistory([...elementsRef.current, element]);
+      setSelectedIds([id]);
+      return;
+    }
+
+    if (activeTool === 'hand') return;
 
     if (activeTool === 'select') {
       const isClickedOnTransformer = e.target.getParent()?.className === 'Transformer';
@@ -628,11 +883,37 @@ export const Canvas: React.FC<CanvasProps> = ({
     newElementRef.current = element;
     setNewElement(element);
     setSelectedIds([id]);
-  }, [activeTool, defaultProps, handleTextInput, handleEraser, setSelectedIds, selectedIds]);
+  }, [activeTool, extraTool, defaultProps, handleTextInput, handleEraser, setSelectedIds, selectedIds, isDark, saveHistory]);
 
   const handleMouseMove = useCallback((e: any) => {
     const stage = e.target.getStage();
     const pos = getRelativePointerPosition(stage);
+
+    if (extraTool === 'laser-pointer') {
+      setLaserCursorPos(pos);
+    }
+
+    if (extraTool === 'laser-pointer' && isLaserActive) {
+      const shape = stage.getIntersection(pos);
+      if (shape && shape.id()) {
+        const id = shape.id();
+        setElements((prev) => prev.filter((el) => el.id !== id));
+      }
+
+      setLaserPoints(prev => {
+        const newPoints = [...prev, pos.x, pos.y];
+        if (newPoints.length > laserMaxPoints) {
+          return newPoints.slice(-laserMaxPoints);
+        }
+        return newPoints;
+      });
+      return;
+    }
+
+    if (extraTool === 'lasso-selection' && isLassoing) {
+      setLassoPoints(prev => [...prev, pos.x, pos.y]);
+      return;
+    }
 
     if (activeTool === 'eraser' && isDrawing) {
       handleEraser();
@@ -651,20 +932,65 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const updatedElement = { ...currentNew };
 
-    if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'triangle' || activeTool === 'diamond') {
+    if (updatedElement.type === 'rectangle' || updatedElement.type === 'circle' || updatedElement.type === 'triangle' || updatedElement.type === 'diamond' || updatedElement.type === 'frame') {
       updatedElement.width = pos.x - currentNew.x;
       updatedElement.height = pos.y - currentNew.y;
-    } else if (activeTool === 'line' || activeTool === 'arrow') {
+    } else if (updatedElement.type === 'line' || updatedElement.type === 'arrow') {
       updatedElement.points = [0, 0, pos.x - currentNew.x, pos.y - currentNew.y];
-    } else if (activeTool === 'pencil') {
+    } else if (updatedElement.type === 'pencil') {
       updatedElement.points = [...(currentNew.points || []), pos.x - currentNew.x, pos.y - currentNew.y];
     }
 
     newElementRef.current = updatedElement;
     setNewElement(updatedElement);
-  }, [activeTool, isDrawing, isSelecting, handleEraser]);
+  }, [activeTool, extraTool, isDrawing, isSelecting, handleEraser, isLaserActive, isLassoing, setElements]);
 
   const handleMouseUp = useCallback(async () => {
+    if (extraTool === 'laser-pointer' && isLaserActive) {
+      setIsLaserActive(false);
+      if (laserTimeoutRef.current != null) {
+        window.clearTimeout(laserTimeoutRef.current);
+      }
+      laserTimeoutRef.current = window.setTimeout(() => {
+        setLaserPoints([]);
+        laserTimeoutRef.current = null;
+      }, 300);
+      return;
+    }
+
+    if (extraTool === 'lasso-selection' && isLassoing) {
+      setIsLassoing(false);
+      if (lassoPoints.length >= 6) {
+        const selected = elementsRef.current
+          .filter((el) => {
+            let cx = el.x;
+            let cy = el.y;
+            if (el.width != null && el.height != null) {
+              cx = el.x + el.width / 2;
+              cy = el.y + el.height / 2;
+            } else if (el.points && el.points.length >= 2) {
+              let sx = 0;
+              let sy = 0;
+              let n = 0;
+              for (let i = 0; i < el.points.length; i += 2) {
+                sx += el.points[i];
+                sy += el.points[i + 1];
+                n++;
+              }
+              if (n > 0) {
+                cx = el.x + sx / n;
+                cy = el.y + sy / n;
+              }
+            }
+            return pointInPolygon(cx, cy, lassoPoints);
+          })
+          .map((el) => el.id);
+        setSelectedIds(selected);
+      }
+      setLassoPoints([]);
+      return;
+    }
+
     if (isSelecting) {
       const box = selectionBox;
       const x1 = Math.min(box.x, box.x + box.width);
@@ -700,7 +1026,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     const currentNew = newElementRef.current;
     if (currentNew) {
       const finalElement = { ...currentNew };
-      if (['rectangle', 'circle', 'triangle', 'diamond'].includes(finalElement.type)) {
+      if (['rectangle', 'circle', 'triangle', 'diamond', 'frame'].includes(finalElement.type)) {
         const width = finalElement.width ?? 0;
         const height = finalElement.height ?? 0;
         if (width < 0) {
@@ -728,7 +1054,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     newElementRef.current = null;
     setNewElement(null);
-  }, [isSelecting, selectionBox, activeTool, isDrawing, eraserSnapshot, saveHistory, setSelectedIds]);
+  }, [isSelecting, selectionBox, activeTool, isDrawing, eraserSnapshot, saveHistory, setSelectedIds, extraTool, isLaserActive, lassoPoints]);
 
   const handleTransformEnd = useCallback((e: any) => {
     const nodes = transformerRef.current?.nodes();
@@ -747,7 +1073,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         rotation: node.rotation(),
       };
 
-      if (element.type === 'rectangle' || element.type === 'text' || element.type === 'image') {
+      if (element.type === 'rectangle' || element.type === 'text' || element.type === 'image' || element.type === 'web-embed') {
         const newWidth = node.width() * node.scaleX();
         const newHeight = node.height() * node.scaleY();
         updatedElement.width = newWidth;
@@ -961,6 +1287,98 @@ export const Canvas: React.FC<CanvasProps> = ({
 
       // CTRL + V (Paste)
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        // Try to get clipboard content first
+        try {
+          const clipboardItems = await navigator.clipboard.read();
+          for (const item of clipboardItems) {
+            for (const type of item.types) {
+              if (type.startsWith('image/')) {
+                const blob = await item.getType(type);
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  const dataUrl = event.target?.result as string;
+                  if (dataUrl) {
+                    const id = nanoid();
+                    const element: WhiteboardElement = {
+                      id,
+                      type: 'image',
+                      x: 100,
+                      y: 100,
+                      width: 300,
+                      height: 200,
+                      src: dataUrl,
+                      stroke: 'transparent',
+                      fill: 'transparent',
+                      strokeWidth: 0,
+                      rotation: 0,
+                      strokeStyle: 'solid',
+                      sloppiness: 0,
+                      edges: 'sharp',
+                      opacity: 1,
+                      arrowType: 'simple',
+                      arrowheads: true,
+                      arrowBreakPoints: 3,
+                      arrowheadTail: false,
+                      arrowheadStyle: 'triangle',
+                      fontFamily: 'Sans-serif',
+                      fontSize: 20,
+                      textAlign: 'left',
+                      ...defaultProps
+                    };
+                    saveHistory([...elements, element]);
+                    setSelectedIds([id]);
+                  }
+                };
+                reader.readAsDataURL(blob);
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          // Clipboard API failed, try text
+        }
+
+        // Try to read URL from clipboard as text
+        try {
+          const text = await navigator.clipboard.readText();
+          const urlType = detectUrlType(text);
+          if (urlType === 'image' || urlType === 'video' || urlType === 'youtube' || urlType === 'vimeo') {
+            const id = nanoid();
+            const element: WhiteboardElement = {
+              id,
+              type: 'web-embed',
+              x: 100,
+              y: 100,
+              width: 400,
+              height: 250,
+              text: text,
+              stroke: defaultProps.stroke ?? (isDark ? DEFAULT_STROKE_DARK : DEFAULT_STROKE_LIGHT),
+              fill: isDark ? '#020617' : '#f9fafb',
+              strokeWidth: 2,
+              rotation: 0,
+              strokeStyle: 'solid',
+              sloppiness: 0,
+              edges: 'sharp',
+              opacity: 1,
+              arrowType: 'simple',
+              arrowheads: false,
+              arrowBreakPoints: 3,
+              arrowheadTail: false,
+              arrowheadStyle: 'triangle',
+              fontFamily: 'Sans-serif',
+              fontSize: 14,
+              textAlign: 'left',
+              ...defaultProps
+            };
+            saveHistory([...elements, element]);
+            setSelectedIds([id]);
+            return;
+          }
+        } catch (err) {
+          // Clipboard read failed
+        }
+
+        // Paste whiteboard elements from internal clipboard
         if (clipboard.length === 0) return;
 
         const offset = 20;
@@ -979,7 +1397,20 @@ export const Canvas: React.FC<CanvasProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, elements, clipboard, saveHistory, setSelectedIds]);
+  }, [selectedIds, elements, clipboard, saveHistory, setSelectedIds, defaultProps, isDark]);
+
+  // Reset laser state when leaving the laser tool
+  useEffect(() => {
+    if (extraTool !== 'laser-pointer') {
+      setIsLaserActive(false);
+      setLaserPoints([]);
+      setLaserCursorPos(null);
+      if (laserTimeoutRef.current != null) {
+        window.clearTimeout(laserTimeoutRef.current);
+        laserTimeoutRef.current = null;
+      }
+    }
+  }, [extraTool]);
 
   const getDash = (style: string) => {
     if (style === 'dashed') return [10, 5];
@@ -1040,20 +1471,40 @@ export const Canvas: React.FC<CanvasProps> = ({
     setDraggingControlPoint(null);
   }, [saveHistory]);
 
+  const cursor =
+    extraTool === 'laser-pointer'
+      ? 'none'
+      : extraTool === 'lasso-selection' || extraTool === 'frame' || extraTool === 'web-embed'
+        ? 'crosshair'
+        : activeTool === 'hand'
+          ? 'grab'
+          : activeTool === 'select'
+            ? 'default'
+            : 'crosshair';
+
+  // Collect web-embed elements that need HTML overlay rendering
+  const webEmbedElements = elements.filter(el => el.type === 'web-embed');
+
   return (
-    <div className={`w-full h-screen ${canvasBackground} overflow-hidden`}>
+    <div className={`w-full h-screen ${canvasBackground} overflow-hidden relative`}>
       <Stage
         width={stageSize.width} height={stageSize.height}
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
         onDragStart={handleStageDragStart}
         onDragEnd={handleStageDragEnd}
         onDragMove={handleStageDragMove}
+        onClick={(e) => {
+          // If clicking on empty stage background, exit interactive embed mode
+          if (e.target === e.target.getStage()) {
+            setInteractingEmbedId(null);
+          }
+        }}
         ref={stageRef} draggable={(activeTool as string) === 'hand'}
         scaleX={zoom}
         scaleY={zoom}
         x={stagePosition.x}
         y={stagePosition.y}
-        style={{ cursor: activeTool === 'hand' ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair' }}
+        style={{ cursor }}
       >
         <Layer>
           {elements.map((el) => {
@@ -1076,6 +1527,23 @@ export const Canvas: React.FC<CanvasProps> = ({
               }
             };
 
+            if (el.type === 'frame') {
+              const w = el.width ?? 0;
+              const h = el.height ?? 0;
+              return (
+                <Rect
+                  key={el.id}
+                  {...commonProps}
+                  width={w}
+                  height={h}
+                  stroke={resolveStroke(el.stroke)}
+                  strokeWidth={el.strokeWidth}
+                  dash={getDash('dashed')}
+                  fill="transparent"
+                  cornerRadius={8}
+                />
+              );
+            }
             if (el.type === 'rectangle') {
               const slop = el.sloppiness ?? 0;
               const w = el.width ?? 0;
@@ -1310,8 +1778,164 @@ export const Canvas: React.FC<CanvasProps> = ({
               return <Text key={el.id} {...commonProps} strokeWidth={0} fill={resolveStroke(el.stroke)} text={el.text ?? ''} fontSize={el.fontSize ?? 20} fontFamily={el.fontFamily ?? 'Sans-serif'} fontStyle="normal" lineHeight={1.2} align={el.textAlign ?? 'left'} width={el.width ?? 0} height={el.height ?? 0} onDblClick={(e) => handleTextInput(el.x, el.y, el.id, el.text ?? '', () => setEditingTextId(null))} />;
             }
             if (el.type === 'image') return <ImageElement key={el.id} el={el} activeTool={activeTool} {...commonProps} />;
+            if (el.type === 'web-embed') {
+              const w = el.width ?? 400;
+              const h = el.height ?? 250;
+              const url = el.text ?? '';
+              const urlType = detectUrlType(url);
+
+              return (
+                <Group
+                  key={el.id}
+                  {...commonProps}
+                  onDblClick={(e) => {
+                    if ((activeTool as string) === 'select') {
+                      e.cancelBubble = true;
+                      setInteractingEmbedId(el.id);
+                    }
+                  }}
+                >
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={w}
+                    height={h}
+                    cornerRadius={10}
+                    fill={isDark ? '#020617' : '#f9fafb'}
+                    stroke={resolveStroke(el.stroke)}
+                    strokeWidth={el.strokeWidth}
+                  />
+                  {urlType === 'image' && (
+                    <WebEmbedImage url={url} width={w} height={h} />
+                  )}
+                  {urlType === 'youtube' && (
+                    <>
+                      <WebEmbedYoutube url={url} width={w} height={h} />
+                      {selectedIds.includes(el.id) && interactingEmbedId !== el.id && (
+                        <Text
+                          x={0}
+                          y={h / 2 - 10}
+                          width={w}
+                          text="⇕ Duplo clique para interagir"
+                          fontSize={13}
+                          fill="#9ca3af"
+                          align="center"
+                        />
+                      )}
+                    </>
+                  )}
+                  {urlType === 'vimeo' && (
+                    <>
+                      <WebEmbedVimeo url={url} width={w} height={h} />
+                      {selectedIds.includes(el.id) && interactingEmbedId !== el.id && (
+                        <Text
+                          x={0}
+                          y={h / 2 - 10}
+                          width={w}
+                          text="⇕ Duplo clique para interagir"
+                          fontSize={13}
+                          fill="#9ca3af"
+                          align="center"
+                        />
+                      )}
+                    </>
+                  )}
+                  {urlType === 'video' && (
+                    <>
+                      <WebEmbedVideo url={url} width={w} height={h} />
+                      {selectedIds.includes(el.id) && interactingEmbedId !== el.id && (
+                        <Text
+                          x={0}
+                          y={h / 2 - 10}
+                          width={w}
+                          text="⇕ Duplo clique para interagir"
+                          fontSize={13}
+                          fill="#9ca3af"
+                          align="center"
+                        />
+                      )}
+                    </>
+                  )}
+                  {urlType === 'unknown' && (
+                    <>
+                      <Rect
+                        x={0}
+                        y={0}
+                        width={w}
+                        height={32}
+                        cornerRadius={{ topLeft: 10, topRight: 10, bottomLeft: 0, bottomRight: 0 } as any}
+                        fill={isDark ? '#111827' : '#e5e7eb'}
+                      />
+                      <Text
+                        x={12}
+                        y={8}
+                        text="Web embed"
+                        fontSize={13}
+                        fontStyle="600"
+                        fill={isDark ? '#e5e7eb' : '#111827'}
+                      />
+                      <Text
+                        x={12}
+                        y={48}
+                        width={w - 24}
+                        text={url}
+                        fontSize={12}
+                        fill={isDark ? '#9ca3af' : '#374151'}
+                        ellipsis
+                      />
+                    </>
+                  )}
+                </Group>
+              );
+            }
             return null;
           })}
+
+          {extraTool === 'laser-pointer' && laserCursorPos && (
+            <>
+              {laserPoints.length >= 2 && (
+                <Line
+                  x={0}
+                  y={0}
+                  points={laserPoints}
+                  stroke="#ef4444"
+                  strokeWidth={4}
+                  lineCap="round"
+                  lineJoin="round"
+                  opacity={0.9}
+                  shadowColor="#fca5a5"
+                  shadowBlur={10}
+                  shadowOpacity={0.85}
+                />
+              )}
+              <Path
+                x={laserCursorPos.x - 10}
+                y={laserCursorPos.y - 10}
+                data="m9.644 13.69 7.774-7.773a2.357 2.357 0 0 0-3.334-3.334l-7.773 7.774L8 12l1.643 1.69Z"
+                stroke="#000"
+                strokeWidth={1.5}
+                fill="#fff"
+                scaleX={1.5}
+                scaleY={1.5}
+                shadowColor="#fff"
+                shadowBlur={10}
+                shadowOpacity={0.8}
+              />
+              <Path
+                x={laserCursorPos.x - 10}
+                y={laserCursorPos.y - 10}
+                data="m13.25 3.417 3.333 3.333M10 10l2-2M5 15l3-3M2.156 17.894l1-1M5.453 19.029l-.144-1.407M2.377 11.887l.866 1.118M8.354 17.273l-1.194-.758M.953 14.652l1.408.13"
+                stroke="#000"
+                strokeWidth={1.5}
+                fill="none"
+                scaleX={1.5}
+                scaleY={1.5}
+                shadowColor="#fff"
+                shadowBlur={10}
+                shadowOpacity={0.8}
+              />
+            </>
+          )}
 
           {newElement && (
             <>
@@ -1413,6 +2037,120 @@ export const Canvas: React.FC<CanvasProps> = ({
           )}
         </Layer>
       </Stage>
+
+      {/* HTML overlay for web-embed iframes and images */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          overflow: 'hidden',
+        }}
+      >
+        {webEmbedElements.map((el) => {
+          const w = el.width ?? 400;
+          const h = el.height ?? 250;
+          const url = el.text ?? '';
+          const urlType = detectUrlType(url);
+
+          // Skip unknown URLs — handled by Konva layer
+          if (urlType === 'unknown') return null;
+
+          // Convert canvas coords → screen coords
+          const screenX = stagePosition.x + el.x * zoom;
+          const screenY = stagePosition.y + el.y * zoom;
+          const screenW = w * zoom;
+          const screenH = h * zoom;
+          const rotation = el.rotation ?? 0;
+
+          const padding = 10 * zoom;
+          const innerX = screenX + padding;
+          const innerY = screenY + padding;
+          const innerW = screenW - padding * 2;
+          const innerH = screenH - padding * 2;
+
+          let content: React.ReactNode = null;
+
+          if (urlType === 'image') {
+            content = (
+              <img
+                src={url}
+                alt="embed"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  display: 'block',
+                  borderRadius: 5,
+                  backgroundColor: '#000',
+                }}
+              />
+            );
+          } else if (urlType === 'youtube') {
+            const videoId = getYoutubeId(url);
+            if (videoId) {
+              content = (
+                <iframe
+                  src={`https://www.youtube.com/embed/${videoId}`}
+                  title="YouTube video"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{ width: '100%', height: '100%', border: 'none', borderRadius: 5 }}
+                />
+              );
+            }
+          } else if (urlType === 'vimeo') {
+            const videoId = getVimeoId(url);
+            if (videoId) {
+              content = (
+                <iframe
+                  src={`https://player.vimeo.com/video/${videoId}`}
+                  title="Vimeo video"
+                  frameBorder="0"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  allowFullScreen
+                  style={{ width: '100%', height: '100%', border: 'none', borderRadius: 5 }}
+                />
+              );
+            }
+          } else if (urlType === 'video') {
+            content = (
+              <video
+                src={url}
+                controls
+                style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 5 }}
+              />
+            );
+          }
+
+          if (!content) return null;
+
+          return (
+            <div
+              key={el.id}
+              style={{
+                position: 'absolute',
+                left: innerX,
+                top: innerY,
+                width: innerW,
+                height: innerH,
+                // Only allow pointer events in interactive mode; otherwise Konva handles all drag/select
+                pointerEvents: interactingEmbedId === el.id ? 'auto' : 'none',
+                borderRadius: 5,
+                overflow: 'hidden',
+                transform: rotation ? `rotate(${rotation}deg)` : undefined,
+                transformOrigin: 'center center',
+              }}
+            >
+              {content}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

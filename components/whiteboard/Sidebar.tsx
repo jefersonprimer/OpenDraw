@@ -22,17 +22,17 @@ import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/app/contexts/ThemeContext";
 import { setLocale } from "@/app/actions/locale";
-
 type SidebarProps = {
   onOpenClick?: () => void;
   onSaveClick?: () => void;
   onResetCanvas?: () => void;
   canvasBackground?: string;
   onCanvasBackgroundChange?: (color: string) => void;
+  onLiveCollaborationClick?: () => void;
 }
 
-export default function Sidebar({ onOpenClick, onSaveClick, onResetCanvas, canvasBackground = 'bg-gray-50', onCanvasBackgroundChange }: SidebarProps) {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+export default function Sidebar({ onOpenClick, onSaveClick, onResetCanvas, canvasBackground = 'bg-gray-50', onCanvasBackgroundChange, onLiveCollaborationClick }: SidebarProps) {
+  const { theme, setTheme, resolvedTheme, mounted } = useTheme();
   const t = useTranslations('Sidebar');
   const locale = useLocale();
   const router = useRouter();
@@ -52,7 +52,7 @@ export default function Sidebar({ onOpenClick, onSaveClick, onResetCanvas, canva
         <MenuItem icon={<FolderOpen size={16} />} label={t('open')} shortcut="Ctrl+O" onClick={onOpenClick} />
         <MenuItem icon={<Save size={16} />} label={t('saveTo')} onClick={onSaveClick} />
         <MenuItem icon={<ImageIcon size={16} />} label={t('exportImage')} shortcut="Ctrl+Shift+E" />
-        <MenuItem icon={<Users size={16} />} label={t('liveCollaboration')} />
+        <MenuItem icon={<Users size={16} />} label={t('liveCollaboration')} onClick={onLiveCollaborationClick}/>
         <MenuItem icon={<Command size={16} />} label={t('commandPalette')} shortcut="Ctrl+/" highlight />
         <MenuItem icon={<Search size={16} />} label={t('findOnCanvas')} shortcut="Ctrl+F" />
         <MenuItem icon={<HelpCircle size={16} />} label={t('help')} shortcut="?" />
@@ -109,7 +109,7 @@ export default function Sidebar({ onOpenClick, onSaveClick, onResetCanvas, canva
         {/* Canvas background */}
         <div className="px-2">
           <p className="text-xs text-[#1b1b1f] dark:text-white mb-2">{t('canvasBackground')}</p>
-          {resolvedTheme === 'light' ? (
+          {mounted && resolvedTheme === 'light' ? (
             <div className="flex gap-2 flex-wrap">
               <ColorSwatch color="bg-white" active={canvasBackground === 'bg-white'} onClick={() => onCanvasBackgroundChange?.('bg-white')} />
               <ColorSwatch color="bg-gray-50" active={canvasBackground === 'bg-gray-50'} onClick={() => onCanvasBackgroundChange?.('bg-gray-50')} />
@@ -118,7 +118,7 @@ export default function Sidebar({ onOpenClick, onSaveClick, onResetCanvas, canva
               <ColorSwatch color="bg-neutral-300" active={canvasBackground === 'bg-neutral-300'} onClick={() => onCanvasBackgroundChange?.('bg-neutral-300')} />
               <ColorSwatch color="bg-yellow-100" active={canvasBackground === 'bg-yellow-100'} onClick={() => onCanvasBackgroundChange?.('bg-yellow-100')} />
             </div>
-          ) : (
+          ) : mounted && resolvedTheme === 'dark' ? (
             <div className="flex gap-2 flex-wrap">
               <ColorSwatch color="bg-neutral-900" active={canvasBackground === 'bg-neutral-900'} onClick={() => onCanvasBackgroundChange?.('bg-neutral-900')} />
               <ColorSwatch color="bg-gray-800" active={canvasBackground === 'bg-gray-800'} onClick={() => onCanvasBackgroundChange?.('bg-gray-800')} />
@@ -127,12 +127,16 @@ export default function Sidebar({ onOpenClick, onSaveClick, onResetCanvas, canva
               <ColorSwatch color="bg-gray-950" active={canvasBackground === 'bg-gray-950'} onClick={() => onCanvasBackgroundChange?.('bg-gray-950')} />
               <ColorSwatch color="bg-stone-950" active={canvasBackground === 'bg-stone-950'} onClick={() => onCanvasBackgroundChange?.('bg-stone-950')} />
             </div>
+          ) : (
+            <div className="flex gap-2 flex-wrap">
+              <ColorSwatch color="bg-gray-50" active={canvasBackground === 'bg-gray-50'} onClick={() => onCanvasBackgroundChange?.('bg-gray-50')} />
+              <ColorSwatch color="bg-neutral-100" active={canvasBackground === 'bg-neutral-100'} onClick={() => onCanvasBackgroundChange?.('bg-neutral-100')} />
+            </div>
           )}
         </div>
 
       </div>
-
-    </div>
+    </div> 
   )
 }
 

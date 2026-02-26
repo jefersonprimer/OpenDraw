@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Copy, Check } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 
 interface ShareLinkModalProps {
   isOpen: boolean;
@@ -33,24 +33,18 @@ export function ShareLinkModal({ isOpen, onClose, link }: ShareLinkModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[210] flex items-center justify-center">
+    <div className="fixed inset-0 z-210 flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0"
         onClick={onClose}
       />
-      <div className="relative bg-white dark:bg-[#1C1C1C] rounded-xl shadow-2xl w-full max-w-md mx-4 border border-neutral-200 dark:border-neutral-800">
-        <div className="flex items-center justify-between p-4 border-b border-neutral-200 dark:border-neutral-800">
-          <h2 className="text-lg font-semibold text-[#1b1b1f] dark:text-white">Shareable link</h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="p-6 space-y-3">
+      <div className="relative bg-white dark:bg-[#1C1C1C] rounded-xl shadow-2xl w-full max-w-137.5 mx-4 border border-neutral-200 dark:border-neutral-800">
+        <div className="p-6 space-y-3 ">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[#1b1b1f] dark:text-white">Shareable link</h2>
+          </div>
           <p className="text-sm font-medium text-[#1b1b1f] dark:text-white">Link</p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 border-b border-[#ebebeb] pb-4">
             <input
               type="text"
               readOnly
@@ -65,6 +59,9 @@ export function ShareLinkModal({ isOpen, onClose, link }: ShareLinkModalProps) {
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
+          <p className="text-sm">
+            🔒 The upload has been secured with end-to-end encryption, which means that Excalidraw server and third parties can't read the content.
+          </p>
         </div>
       </div>
     </div>
