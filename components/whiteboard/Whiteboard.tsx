@@ -9,7 +9,7 @@ import { db, WhiteboardElement } from '@/lib/db';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { Plus, Minus, Undo2, Redo2, ShieldCheck, HelpCircle, Menu, X, Share2, PanelRight } from 'lucide-react';
 import Sidebar from './Sidebar';
-import { useTheme } from '@/app/contexts/ThemeContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 import { SaveModal } from './SaveModal';
 import { OpenModal } from './OpenModal';

@@ -3,8 +3,8 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Hand, MousePointer2, Square, Circle, Type, Minus, Triangle, ArrowRight, Pencil, Image as ImageIcon, Eraser, Diamond, Trash2, Sun, Moon, Globe2, LassoSelect, ChevronDown, Check, Hash } from 'lucide-react';
-import LaserIcon from '@/app/components/LaserIcon';
-import { useTheme } from '@/app/contexts/ThemeContext';
+import LaserIcon from '@/components/LaserIcon';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export type Tool = 'hand' | 'select' | 'rectangle' | 'diamond' | 'triangle' | 'circle' | 'arrow' | 'line' | 'pencil' | 'text' | 'image' | 'eraser';
 

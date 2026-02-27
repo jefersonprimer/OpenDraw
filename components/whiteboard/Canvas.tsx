@@ -7,7 +7,7 @@ import { WhiteboardElement, db } from '@/lib/db';
 import { Tool, ExtraTool } from './Toolbar';
 import Konva from 'konva';
 import useImage from 'use-image';
-import { useTheme } from '@/app/contexts/ThemeContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Pencil } from 'lucide-react';
 
 function detectUrlType(url: string): 'image' | 'video' | 'youtube' | 'vimeo' | 'unknown' {

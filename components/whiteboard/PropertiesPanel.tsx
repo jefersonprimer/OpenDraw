@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { WhiteboardElement } from '@/lib/db';
-import { useTheme } from '@/app/contexts/ThemeContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { 
   Minus, AlignLeft, AlignCenter, AlignRight,
   Maximize, Square as SquareIcon,

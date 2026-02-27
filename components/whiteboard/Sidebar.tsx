@@ -22,8 +22,8 @@ import {
 } from "lucide-react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useTheme } from "@/app/contexts/ThemeContext";
-import { setLocale } from "@/app/actions/locale";
+import { useTheme } from "@/contexts/ThemeContext";
+import { setLocale } from "@/actions/locale";
 type SidebarProps = {
   onOpenClick?: () => void;
   onSaveClick?: () => void;
