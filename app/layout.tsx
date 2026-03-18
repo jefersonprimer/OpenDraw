@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OpenDraw Whiteboard",
-  description: "create by Primer",
+  title: "Primerdraw Whiteboard",
+  description: "Sketch ideas instantly.",
 };
 
 // Script to prevent flash of wrong theme (runs before React hydrates)

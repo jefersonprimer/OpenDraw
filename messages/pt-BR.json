@@ -8,7 +8,7 @@
     "findOnCanvas": "Buscar no canvas",
     "help": "Ajuda",
     "resetCanvas": "Limpar o canvas",
-    "excalidrawPlus": "Excalidraw+",
+    "excalidrawPlus": "Primerdraw+",
     "github": "GitHub",
     "followUs": "Siga-nos",
     "discordChat": "Chat no Discord",
@@ -46,7 +46,7 @@
     "linkLabel": "Link",
     "copy": "Copiar",
     "copied": "Copiado",
-    "encryptionNotice": "O upload foi protegido com criptografia ponta a ponta, o que significa que o servidor do OpenDraw e terceiros não conseguem ler o conteúdo."
+    "encryptionNotice": "O upload foi protegido com criptografia ponta a ponta, o que significa que o servidor do PrimerDraw e terceiros não conseguem ler o conteúdo."
   },
   "LibrarySidebar": {
     "title": "Biblioteca",

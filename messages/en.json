@@ -8,7 +8,7 @@
     "findOnCanvas": "Find on canvas",
     "help": "Help",
     "resetCanvas": "Reset the canvas",
-    "excalidrawPlus": "Excalidraw+",
+    "excalidrawPlus": "Primerdraw+",
     "github": "GitHub",
     "followUs": "Follow us",
     "discordChat": "Discord chat",
@@ -46,7 +46,7 @@
     "linkLabel": "Link",
     "copy": "Copy",
     "copied": "Copied",
-    "encryptionNotice": "The upload has been secured with end-to-end encryption, which means that OpenDraw server and third parties can't read the content."
+    "encryptionNotice": "The upload has been secured with end-to-end encryption, which means that PrimerDraw server and third parties can't read the content."
   },
   "LibrarySidebar": {
     "title": "Library",
