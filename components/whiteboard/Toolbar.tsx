@@ -49,6 +49,7 @@ const extraTools: { id: Exclude<ExtraTool, 'none'>; label: string; icon: React.R
 ];
 
 const shapeToolIds: Tool[] = ['rectangle', 'diamond', 'triangle', 'circle'];
+const lineToolIds: Tool[] = ['arrow', 'line'];
 
 const tools: { id: Tool; icon: React.ReactNode; label: string; isAction?: boolean }[] = [
   { id: 'hand', icon: <Hand size={18} />, label: 'Hand (panning tool) - H or null' },
@@ -131,7 +132,9 @@ const ExtraToolDropdown: React.FC<ExtraToolDropdownProps> = ({
 interface ShapeDropdownProps {
   isOpen: boolean;
   position: { top: number; left: number } | null;
+  activeToolIds: Tool[];
   activeTool: Tool;
+  toolIds: Tool[];
   onSelect: (tool: Tool) => void;
   onClose: () => void;
 }
@@ -139,7 +142,9 @@ interface ShapeDropdownProps {
 const ShapeDropdown: React.FC<ShapeDropdownProps> = ({
   isOpen,
   position,
+  activeToolIds,
   activeTool,
+  toolIds,
   onSelect,
   onClose,
 }) => {
@@ -156,9 +161,9 @@ const ShapeDropdown: React.FC<ShapeDropdownProps> = ({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {shapeToolIds.map((toolId) => {
+        {toolIds.map((toolId) => {
           const tool = tools.find(t => t.id === toolId)!;
-          const isActive = activeTool === toolId;
+          const isActive = activeToolIds.includes(activeTool) && activeTool === toolId;
           return (
             <button
               key={toolId}
@@ -194,18 +199,28 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const { resolvedTheme, setTheme } = useTheme();
   const [isExtraToolModalOpen, setIsExtraToolModalOpen] = React.useState(false);
   const [isShapeModalOpen, setIsShapeModalOpen] = React.useState(false);
+  const [isLineModalOpen, setIsLineModalOpen] = React.useState(false);
   const currentExtraTool = extraTools.find((tool) => tool.id === activeExtraTool) ?? extraTools[0];
   const extraToolButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const shapeButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const lineButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const [extraMenuPosition, setExtraMenuPosition] = React.useState<{ top: number; left: number } | null>(null);
   const [shapeMenuPosition, setShapeMenuPosition] = React.useState<{ top: number; left: number } | null>(null);
+  const [lineMenuPosition, setLineMenuPosition] = React.useState<{ top: number; left: number } | null>(null);
 
   // Default shape to show when none is active
   const [lastActiveShape, setLastActiveShape] = React.useState<Tool>('rectangle');
+  const [lastActiveLineTool, setLastActiveLineTool] = React.useState<Tool>('arrow');
 
   useEffect(() => {
     if (shapeToolIds.includes(activeTool)) {
       setLastActiveShape(activeTool);
+    }
+  }, [activeTool]);
+
+  useEffect(() => {
+    if (lineToolIds.includes(activeTool)) {
+      setLastActiveLineTool(activeTool);
     }
   }, [activeTool]);
 
@@ -321,6 +336,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     });
   };
 
+  const handleLineButtonClick = () => {
+    setIsLineModalOpen((open) => {
+      const willOpen = !open;
+      if (willOpen && lineButtonRef.current) {
+        const rect = lineButtonRef.current.getBoundingClientRect();
+        setLineMenuPosition({
+          top: rect.top - 8,
+          left: rect.left,
+        });
+      }
+      return willOpen;
+    });
+  };
+
   return (
     <div className="fixed left-1/2 -translate-x-1/2 bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-1 flex gap-1 z-50 overflow-x-auto max-w-[95vw] items-center top-auto bottom-4 md:top-4 md:bottom-auto">
       {/* Desktop Tools: Show all */}
@@ -381,8 +410,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <ChevronDown size={14} className="text-neutral-400" />
         </button>
 
+        {/* Line and arrow dropdown trigger */}
+        <button
+          ref={lineButtonRef}
+          onClick={handleLineButtonClick}
+          className={`p-2 rounded-md transition-colors flex items-center gap-1 ${lineToolIds.includes(activeTool)
+              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-400'
+              : 'text-gray-600 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800'
+            }`}
+        >
+          {tools.find(t => t.id === lastActiveLineTool)?.icon}
+          <ChevronDown size={14} className="text-neutral-400" />
+        </button>
+
         {/* Other tools shown individually */}
-        {tools.filter(t => !['hand', 'select', ...shapeToolIds].includes(t.id)).map((tool) => (
+        {tools.filter(t => !['hand', 'select', ...shapeToolIds, ...lineToolIds].includes(t.id)).map((tool) => (
           <button
             key={tool.id}
             onClick={() => handleClick(tool.id)}
@@ -451,12 +493,27 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       <ShapeDropdown
         isOpen={isShapeModalOpen}
         position={shapeMenuPosition}
+        activeToolIds={shapeToolIds}
         activeTool={activeTool}
+        toolIds={shapeToolIds}
         onSelect={(tool) => {
           handleClick(tool);
           setIsShapeModalOpen(false);
         }}
         onClose={() => setIsShapeModalOpen(false)}
+      />
+
+      <ShapeDropdown
+        isOpen={isLineModalOpen}
+        position={lineMenuPosition}
+        activeToolIds={lineToolIds}
+        activeTool={activeTool}
+        toolIds={lineToolIds}
+        onSelect={(tool) => {
+          handleClick(tool);
+          setIsLineModalOpen(false);
+        }}
+        onClose={() => setIsLineModalOpen(false)}
       />
     </div>
   );

@@ -99,16 +99,31 @@ export function PropertiesPanel({
   const [isMounted, setIsMounted] = useState(false);
   const [mobileModalArrowLeft, setMobileModalArrowLeft] = useState(0);
   const [mobileModalLeft, setMobileModalLeft] = useState(16);
+  const [mobileModalNeedsScroll, setMobileModalNeedsScroll] = useState(false);
   const mobileButtonRefs = useRef<Record<'stroke' | 'background' | 'filters' | 'layers', HTMLButtonElement | null>>({
     stroke: null,
     background: null,
     filters: null,
     layers: null,
   });
+  const mobileModalRef = useRef<HTMLDivElement | null>(null);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const STROKE_COLORS = isDark ? STROKE_COLORS_DARK : STROKE_COLORS_LIGHT;
   const isDrawingTool = ['rectangle', 'circle', 'triangle', 'line', 'arrow', 'pencil', 'text', 'image'].includes(activeTool);
+
+  const getMobileModalWidth = (panel: 'stroke' | 'background' | 'filters' | 'layers') => {
+    switch (panel) {
+      case 'layers':
+        return 224;
+      case 'stroke':
+      case 'background':
+        return 320;
+      case 'filters':
+      default:
+        return 420;
+    }
+  };
   
   useEffect(() => {
     setIsMounted(true);
@@ -122,7 +137,7 @@ export function PropertiesPanel({
       if (!button) return;
 
       const rect = button.getBoundingClientRect();
-      const modalWidth = Math.min(window.innerWidth - 32, 420);
+      const modalWidth = Math.min(window.innerWidth - 32, getMobileModalWidth(activeMobilePanel));
       const modalLeft = Math.max(16, Math.min(rect.left + rect.width / 2 - modalWidth / 2, window.innerWidth - modalWidth - 16));
       const arrowHalfWidth = 10;
       const nextLeft = rect.left + rect.width / 2 - modalLeft - arrowHalfWidth;
@@ -135,6 +150,24 @@ export function PropertiesPanel({
 
     return () => window.removeEventListener('resize', updateArrowPosition);
   }, [activeMobilePanel, isMounted]);
+
+  useEffect(() => {
+    if (!activeMobilePanel || !isMounted) {
+      setMobileModalNeedsScroll(false);
+      return;
+    }
+
+    const updateScrollState = () => {
+      const modal = mobileModalRef.current;
+      if (!modal) return;
+      setMobileModalNeedsScroll(modal.scrollHeight > modal.clientHeight + 1);
+    };
+
+    updateScrollState();
+    window.addEventListener('resize', updateScrollState);
+
+    return () => window.removeEventListener('resize', updateScrollState);
+  }, [activeMobilePanel, isMounted, selectedElements, activeTool]);
 
   if (selectedElements.length === 0 && !isDrawingTool) return null;
 
@@ -272,11 +305,9 @@ export function PropertiesPanel({
   const mobileModal = (title: string, content: React.ReactNode) => {
     if (!isMounted || !activeMobilePanel) return null;
 
-    const isLayersModal = activeMobilePanel === 'layers';
     const mobileModalStyle: React.CSSProperties = {
-      width: 'max-content',
-      maxWidth: isLayersModal ? 'min(calc(100vw - 2rem), 520px)' : 'min(calc(100vw - 2rem), 420px)',
-      minWidth: isLayersModal ? '280px' : undefined,
+      width: 'fit-content',
+      maxWidth: `min(calc(100vw - 2rem), ${getMobileModalWidth(activeMobilePanel)}px)`,
       left: mobileModalLeft,
     };
 
@@ -284,7 +315,8 @@ export function PropertiesPanel({
       <div className="fixed inset-0 z-[120] md:hidden" onClick={() => setActiveMobilePanel(null)}>
         <div className="absolute inset-0 bg-black/25" />
         <div
-          className="absolute bottom-32 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#1C1C1C] shadow-2xl p-4 max-h-[60vh] overflow-y-auto custom-scrollbar"
+          ref={mobileModalRef}
+          className={`absolute bottom-32 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#1C1C1C] shadow-2xl p-4 max-h-[60vh] ${mobileModalNeedsScroll ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden'}`}
           style={mobileModalStyle}
           onClick={(e) => e.stopPropagation()}
         >
@@ -621,7 +653,7 @@ export function PropertiesPanel({
               <button
                 key={c}
                 type="button"
-                className={`w-10 h-10 rounded-xl border transition-all ${strokeForSwatch === c ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-[#1C1C1C] scale-105 shadow-sm' : 'border-gray-200 dark:border-neutral-700'}`}
+                className={`w-7 h-7 rounded-lg border transition-all ${strokeForSwatch === c ? 'ring-1 ring-blue-500 ring-offset-1 dark:ring-offset-[#1C1C1C] scale-105 shadow-sm' : 'border-gray-200 dark:border-neutral-700'}`}
                 style={{ backgroundColor: c }}
                 onClick={() => updateElements({ stroke: c })}
               />
@@ -640,7 +672,7 @@ export function PropertiesPanel({
       ))}
 
       {activeMobilePanel === 'background' && mobileModal('Background', (
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-hidden">
           <div className="flex flex-wrap gap-2">
             {BG_COLORS.map((c, i) => {
               const isTransparent = c === 'transparent';
@@ -648,7 +680,7 @@ export function PropertiesPanel({
                 <button
                   key={c + i}
                   type="button"
-                  className={`w-10 h-10 rounded-xl border transition-all ${first.fill === c ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-[#1C1C1C] scale-105 shadow-sm' : 'border-gray-200 dark:border-neutral-700'}`}
+                  className={`w-7 h-7 rounded-lg border transition-all ${first.fill === c ? 'ring-1 ring-blue-500 ring-offset-1 dark:ring-offset-[#1C1C1C] scale-105 shadow-sm' : 'border-gray-200 dark:border-neutral-700'}`}
                   style={isTransparent ? {
                     backgroundColor: isDark ? '#111827' : '#ffffff',
                     backgroundImage: `
@@ -683,7 +715,7 @@ export function PropertiesPanel({
                 <button
                   key={w}
                   onClick={() => updateElements({ strokeWidth: w })}
-                  className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all ${first.strokeWidth === w ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                  className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${first.strokeWidth === w ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                 >
                   <div style={{ height: (i + 1) * 1.5, width: '50%', backgroundColor: 'currentColor', borderRadius: 4 }} />
                 </button>
@@ -697,7 +729,7 @@ export function PropertiesPanel({
                 <button
                   key={s}
                   onClick={() => updateElements({ strokeStyle: s })}
-                  className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all ${first.strokeStyle === s ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                  className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${first.strokeStyle === s ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                 >
                   <div className={`w-2/4 h-0 ${s === 'dashed' ? 'border-t-2 border-dashed' : s === 'dotted' ? 'border-t-2 border-dotted' : 'border-t-2'} border-current`} />
                 </button>
@@ -716,7 +748,7 @@ export function PropertiesPanel({
                   key={value}
                   title={title}
                   onClick={() => updateElements({ sloppiness: value })}
-                  className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all ${first.sloppiness === value ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                  className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${first.sloppiness === value ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                 >
                   {value === 0 && (
                     <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 12.038c1.655-.885 5.9-3.292 8.568-4.354 2.668-1.063.101 2.821 1.32 3.104 1.218.283 5.112-1.814 5.112-1.814" strokeWidth="1.25"></path></svg>
@@ -738,7 +770,7 @@ export function PropertiesPanel({
                 <button
                   key={e}
                   onClick={() => updateElements({ edges: e })}
-                  className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all ${first.edges === e ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                  className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${first.edges === e ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                 >
                   {e === 'sharp' ? <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><svg strokeWidth="1.5"><path d="M3.33334 9.99998V6.66665C3.33334 6.04326 3.33403 4.9332 3.33539 3.33646C4.95233 3.33436 6.06276 3.33331 6.66668 3.33331H10"></path><path d="M13.3333 3.33331V3.34331"></path><path d="M16.6667 3.33331V3.34331"></path><path d="M16.6667 6.66669V6.67669"></path><path d="M16.6667 10V10.01"></path><path d="M3.33334 13.3333V13.3433"></path><path d="M16.6667 13.3333V13.3433"></path><path d="M3.33334 16.6667V16.6767"></path><path d="M6.66666 16.6667V16.6767"></path><path d="M10 16.6667V16.6767"></path><path d="M13.3333 16.6667V16.6767"></path><path d="M16.6667 16.6667V16.6767"></path></svg></svg> : <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><g strokeWidth="1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M4 12v-4a4 4 0 0 1 4 -4h4"></path><line x1="16" y1="4" x2="16" y2="4.01"></line><line x1="20" y1="4" x2="20" y2="4.01"></line><line x1="20" y1="8" x2="20" y2="8.01"></line><line x1="20" y1="12" x2="20" y2="12.01"></line><line x1="4" y1="16" x2="4" y2="16.01"></line><line x1="20" y1="16" x2="20" y2="16.01"></line><line x1="4" y1="20" x2="4" y2="20.01"></line><line x1="8" y1="20" x2="8" y2="20.01"></line><line x1="12" y1="20" x2="12" y2="20.01"></line><line x1="16" y1="20" x2="16" y2="20.01"></line><line x1="20" y1="20" x2="20" y2="20.01"></line></g></svg>}
                 </button>
@@ -759,7 +791,7 @@ export function PropertiesPanel({
                         arrowType: value === 5 ? 'double' : 'simple',
                       })
                     }
-                    className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all text-xs font-semibold ${(first.arrowBreakPoints ?? 3) === value ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                    className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all text-xs font-semibold ${(first.arrowBreakPoints ?? 3) === value ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                   >
                     {icon}
                   </button>
@@ -772,7 +804,7 @@ export function PropertiesPanel({
                     <button
                       key={String(ah)}
                       onClick={() => updateElements({ arrowheads: ah })}
-                      className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all ${(first.arrowheads ?? true) === ah ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                      className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${(first.arrowheads ?? true) === ah ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                     >
                       {ah ? <ArrowRight size={20} /> : <Minus size={20} />}
                     </button>
@@ -780,7 +812,7 @@ export function PropertiesPanel({
                   <span className="text-[11px] text-gray-500 dark:text-neutral-400 w-full mt-1">Ponta no início (duas pontas)</span>
                   <button
                     onClick={() => updateElements({ arrowheadTail: !(first.arrowheadTail ?? false) })}
-                    className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all ${first.arrowheadTail ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                    className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${first.arrowheadTail ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                     title="Cabeça no tail (seta dupla)"
                   >
                     <ArrowLeftRight size={20} />
@@ -812,7 +844,7 @@ export function PropertiesPanel({
                   <button
                     key={s}
                     onClick={() => updateElements({ fontSize: s })}
-                    className={`w-10 h-10 rounded-md border flex items-center justify-center text-xs font-semibold transition-all ${first.fontSize === s ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                    className={`w-7 h-7 rounded-md border flex items-center justify-center text-xs font-semibold transition-all ${first.fontSize === s ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                   >
                     {s}
                   </button>
@@ -823,7 +855,7 @@ export function PropertiesPanel({
                   <button
                     key={a}
                     onClick={() => updateElements({ textAlign: a })}
-                    className={`w-10 h-10 rounded-md border flex items-center justify-center transition-all ${first.textAlign === a ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
+                    className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${first.textAlign === a ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 shadow-inner' : 'border-gray-50 dark:border-neutral-700 bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-200 dark:hover:border-neutral-600'}`}
                   >
                     {a === 'left' ? <AlignLeft size={18} /> : a === 'center' ? <AlignCenter size={18} /> : <AlignRight size={18} />}
                   </button>
@@ -844,11 +876,11 @@ export function PropertiesPanel({
       ))}
 
       {activeMobilePanel === 'layers' && mobileModal('Layers', (
-        <div className="grid grid-cols-4 gap-2">
-          <button onClick={() => onLayerChange('front')} title="To Front" className="h-11 rounded-xl bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><ArrowDownToLine size={16} /></button>
-          <button onClick={() => onLayerChange('forward')} title="Forward" className="h-11 rounded-xl bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><MoveDown size={16} /></button>
-          <button onClick={() => onLayerChange('backward')} title="Backward" className="h-11 rounded-xl bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><MoveUp size={16} /></button>
-          <button onClick={() => onLayerChange('back')} title="To Back" className="h-11 rounded-xl bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><ArrowUpToLine size={16} /></button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onLayerChange('front')} title="To Front" className="w-7 h-7 rounded-md bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><ArrowDownToLine size={16} /></button>
+          <button onClick={() => onLayerChange('forward')} title="Forward" className="w-7 h-7 rounded-md bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><MoveDown size={16} /></button>
+          <button onClick={() => onLayerChange('backward')} title="Backward" className="w-7 h-7 rounded-md bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><MoveUp size={16} /></button>
+          <button onClick={() => onLayerChange('back')} title="To Back" className="w-7 h-7 rounded-md bg-gray-50/30 dark:bg-neutral-800/50 hover:bg-gray-100 dark:hover:bg-neutral-700 flex items-center justify-center text-black dark:text-white transition-all"><ArrowUpToLine size={16} /></button>
         </div>
       ))}
     </>
