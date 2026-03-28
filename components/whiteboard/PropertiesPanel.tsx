@@ -316,7 +316,7 @@ export function PropertiesPanel({
         <div className="absolute inset-0 bg-black/25" />
         <div
           ref={mobileModalRef}
-          className={`absolute bottom-32 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#1C1C1C] shadow-2xl p-4 max-h-[60vh] ${mobileModalNeedsScroll ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden'}`}
+          className={`absolute bottom-32 rounded-md border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#1C1C1C] shadow-2xl p-4 max-h-[60vh] ${mobileModalNeedsScroll ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden'}`}
           style={mobileModalStyle}
           onClick={(e) => e.stopPropagation()}
         >
