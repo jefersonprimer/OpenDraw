@@ -8,7 +8,7 @@ import { Toolbar, Tool, ExtraTool } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { db, WhiteboardElement } from '@/lib/db';
 import { useHistoryState } from '@/lib/useHistoryState';
-import { Plus, Minus, Undo2, Redo2, ShieldCheck, HelpCircle, Menu, X, Share2, PanelRight, Copy } from 'lucide-react';
+import { Plus, Minus, Undo2, Redo2, ShieldCheck, HelpCircle, Menu, X, Share2, PanelRight } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import Sidebar from './Sidebar';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -409,7 +409,7 @@ export default function Whiteboard() {
             setShareLink(getShareableLink(elements));
             setIsShareLinkModalOpen(true);
           }}
-          className="hidden md:flex p-2 bg-blue-400 hover:bg-blue-500 border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg text-white transition-all active:scale-95"
+          className="hidden sm:flex p-2 bg-blue-400 hover:bg-blue-500 border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg text-white transition-all active:scale-95"
           title="Share"
         >
           <Share2 size={20} />
@@ -547,13 +547,14 @@ export default function Whiteboard() {
           selectedElements={selectedElements}
           updateElements={updateElements}
           onLayerChange={handleLayerChange}
+          onDuplicateSelection={handleMobileDuplicateSelection}
         />
       )}
 
       {/* Bottom Controls */}
-      <div className="fixed bottom-20 md:bottom-4 left-4 right-4 md:right-auto flex items-center justify-end md:justify-start gap-2 z-50 pointer-events-none">
+      <div className="fixed bottom-20 sm:bottom-4 left-4 right-4 sm:right-auto flex items-center justify-end sm:justify-start gap-2 z-50 pointer-events-none">
         {/* Zoom Control */}
-        <div className="hidden md:flex items-center bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-1 gap-2 pointer-events-auto">
+        <div className="hidden sm:flex items-center bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-1 gap-2 pointer-events-auto">
           <button
             onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}
             className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-600 dark:text-white transition-colors"
@@ -572,18 +573,6 @@ export default function Whiteboard() {
             <Plus size={16} />
           </button>
         </div>
-
-        {selectedIds.length > 0 && (
-          <button
-            type="button"
-            onClick={handleMobileDuplicateSelection}
-            className="md:hidden flex items-center justify-center p-2 bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors pointer-events-auto active:scale-95"
-            title={t('duplicateSelection')}
-            aria-label={t('duplicateSelection')}
-          >
-            <Copy size={16} />
-          </button>
-        )}
 
         {/* Undo/Redo Control */}
         <div className="flex items-center bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-1 gap-1 pointer-events-auto">
@@ -607,7 +596,7 @@ export default function Whiteboard() {
       </div>
 
       {/* Bottom Right Controls (Desktop Only) */}
-      <div className="fixed bottom-4 right-4 hidden md:flex items-center gap-2 z-50">
+      <div className="fixed bottom-4 right-4 hidden sm:flex items-center gap-2 z-50">
         <div
           className="flex items-center bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-2 text-blue-400 cursor-help"
           title="seus desenhos sao salvos em seu proprio navegador, eles nao sao mandados para nossos servidores"

@@ -8,7 +8,7 @@ import {
   Minus, AlignLeft, AlignCenter, AlignRight,
   Square as SquareIcon,
   Circle as CircleIcon, ArrowRight, ArrowDownToLine, MoveDown, MoveUp, ArrowUpToLine,
-  ChevronDown, ArrowLeftRight, SlidersHorizontal, Ellipsis
+  ChevronDown, ArrowLeftRight, SlidersHorizontal, Ellipsis, Copy
 } from 'lucide-react';
 
 interface PropertiesPanelProps {
@@ -16,6 +16,7 @@ interface PropertiesPanelProps {
   selectedElements: WhiteboardElement[];
   updateElements: (updates: Partial<WhiteboardElement>) => void;
   onLayerChange: (action: 'front' | 'back' | 'forward' | 'backward') => void;
+  onDuplicateSelection?: () => void;
 }
 
 const STROKE_COLORS_LIGHT = ['#000000', '#e03131', '#2f9e41', '#1971c2', '#f08c00'];
@@ -93,12 +94,15 @@ export function PropertiesPanel({
   activeTool,
   selectedElements, 
   updateElements,
-  onLayerChange 
+  onLayerChange,
+  onDuplicateSelection
 }: PropertiesPanelProps) {
   const [activeMobilePanel, setActiveMobilePanel] = useState<'stroke' | 'background' | 'filters' | 'layers' | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [mobileModalArrowLeft, setMobileModalArrowLeft] = useState(0);
   const [mobileModalLeft, setMobileModalLeft] = useState(16);
+  const [mobileModalTop, setMobileModalTop] = useState(128);
+  const [mobileModalArrowTop, setMobileModalArrowTop] = useState(20);
   const [mobileModalNeedsScroll, setMobileModalNeedsScroll] = useState(false);
   const mobileButtonRefs = useRef<Record<'stroke' | 'background' | 'filters' | 'layers', HTMLButtonElement | null>>({
     stroke: null,
@@ -124,6 +128,8 @@ export function PropertiesPanel({
         return 420;
     }
   };
+
+  const isSmallMobile = typeof window !== 'undefined' ? window.innerWidth < 640 : true;
   
   useEffect(() => {
     setIsMounted(true);
@@ -137,18 +143,43 @@ export function PropertiesPanel({
       if (!button) return;
 
       const rect = button.getBoundingClientRect();
+      const isCompact = window.innerWidth < 640;
       const modalWidth = Math.min(window.innerWidth - 32, getMobileModalWidth(activeMobilePanel));
-      const modalLeft = Math.max(16, Math.min(rect.left + rect.width / 2 - modalWidth / 2, window.innerWidth - modalWidth - 16));
+      const modalHeight = mobileModalRef.current?.clientHeight ?? 240;
       const arrowHalfWidth = 10;
-      const nextLeft = rect.left + rect.width / 2 - modalLeft - arrowHalfWidth;
-      setMobileModalLeft(modalLeft);
-      setMobileModalArrowLeft(Math.max(16, Math.min(nextLeft, modalWidth - 36)));
+      const edgePadding = 16;
+
+      if (isCompact) {
+        const modalLeft = Math.max(16, Math.min(rect.left + rect.width / 2 - modalWidth / 2, window.innerWidth - modalWidth - 16));
+        const nextLeft = rect.left + rect.width / 2 - modalLeft - arrowHalfWidth;
+        setMobileModalTop(0);
+        setMobileModalArrowTop(0);
+        setMobileModalLeft(modalLeft);
+        setMobileModalArrowLeft(Math.max(edgePadding, Math.min(nextLeft, modalWidth - edgePadding - arrowHalfWidth * 2)));
+        return;
+      }
+
+      const horizontalGap = 12;
+      const desktopLikeLeft = rect.right + horizontalGap;
+      const clampedLeft = Math.max(16, Math.min(desktopLikeLeft, window.innerWidth - modalWidth - 16));
+      const top = Math.max(16, Math.min(rect.top + rect.height / 2 - modalHeight / 2, window.innerHeight - modalHeight - 16));
+      const nextArrowTop = rect.top + rect.height / 2 - top - arrowHalfWidth;
+      const arrowTop = Math.max(edgePadding, Math.min(nextArrowTop, modalHeight - edgePadding - arrowHalfWidth * 2));
+
+      setMobileModalLeft(clampedLeft);
+      setMobileModalTop(top);
+      setMobileModalArrowTop(arrowTop);
+      setMobileModalArrowLeft(0);
     };
 
     updateArrowPosition();
+    const raf = window.requestAnimationFrame(updateArrowPosition);
     window.addEventListener('resize', updateArrowPosition);
 
-    return () => window.removeEventListener('resize', updateArrowPosition);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', updateArrowPosition);
+    };
   }, [activeMobilePanel, isMounted]);
 
   useEffect(() => {
@@ -309,14 +340,14 @@ export function PropertiesPanel({
       width: 'fit-content',
       maxWidth: `min(calc(100vw - 2rem), ${getMobileModalWidth(activeMobilePanel)}px)`,
       left: mobileModalLeft,
+      top: !isSmallMobile ? mobileModalTop : undefined,
     };
 
     return createPortal(
       <div className="fixed inset-0 z-[120] md:hidden" onClick={() => setActiveMobilePanel(null)}>
-        <div className="absolute inset-0 bg-black/25" />
         <div
           ref={mobileModalRef}
-          className={`absolute bottom-32 rounded-md border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#1C1C1C] shadow-2xl p-4 max-h-[60vh] ${mobileModalNeedsScroll ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden'}`}
+          className={`absolute rounded-md border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#1C1C1C] shadow-2xl p-4 max-h-[60vh] ${isSmallMobile ? 'bottom-32' : ''} ${mobileModalNeedsScroll ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden'}`}
           style={mobileModalStyle}
           onClick={(e) => e.stopPropagation()}
         >
@@ -324,10 +355,17 @@ export function PropertiesPanel({
             <h3 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{title}</h3>
           </div>
           {content}
-          <div
-            className="absolute -bottom-[10px] w-0 h-0 border-l-[10px] border-r-[10px] border-t-[10px] border-l-transparent border-r-transparent border-t-white dark:border-t-[#1C1C1C]"
-            style={{ left: mobileModalArrowLeft }}
-          />
+          {isSmallMobile ? (
+            <div
+              className="absolute -bottom-[10px] w-0 h-0 border-l-[10px] border-r-[10px] border-t-[10px] border-l-transparent border-r-transparent border-t-white dark:border-t-[#1C1C1C]"
+              style={{ left: mobileModalArrowLeft }}
+            />
+          ) : (
+            <div
+              className="absolute -left-[10px] w-0 h-0 border-y-[10px] border-r-[10px] border-y-transparent border-r-white dark:border-r-[#1C1C1C]"
+              style={{ top: mobileModalArrowTop }}
+            />
+          )}
         </div>
       </div>,
       document.body
@@ -584,7 +622,7 @@ export function PropertiesPanel({
         </Section>
       </div>
 
-      <div className="fixed bottom-20 left-4 z-[60] flex items-center gap-2 md:hidden">
+      <div className="fixed left-4 bottom-20 z-[60] flex items-center gap-2 md:hidden sm:top-20 sm:bottom-auto sm:flex-col">
         {showStrokeSection && (
           <MobilePanelButton
             onClick={() => setActiveMobilePanel('stroke')}
@@ -644,6 +682,12 @@ export function PropertiesPanel({
         >
           <Ellipsis size={18} />
         </MobilePanelButton>
+
+        {onDuplicateSelection && (
+          <MobilePanelButton onClick={onDuplicateSelection} title="Duplicar seleção">
+            <Copy size={18} />
+          </MobilePanelButton>
+        )}
       </div>
 
       {activeMobilePanel === 'stroke' && mobileModal('Stroke', (

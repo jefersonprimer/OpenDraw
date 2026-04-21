@@ -85,7 +85,7 @@ const ExtraToolDropdown: React.FC<ExtraToolDropdownProps> = ({
 
   if (typeof document === 'undefined') return null;
 
-  const isMobile = window.innerWidth < 768;
+  const isMobile = window.innerWidth < 640;
 
   return createPortal(
     <div className="fixed inset-0 z-200" onClick={onClose}>
@@ -149,6 +149,7 @@ const ShapeDropdown: React.FC<ShapeDropdownProps> = ({
   onClose,
 }) => {
   if (!isOpen || !position) return null;
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 640 : false;
 
   return createPortal(
     <div className="fixed inset-0 z-200" onClick={onClose}>
@@ -157,7 +158,7 @@ const ShapeDropdown: React.FC<ShapeDropdownProps> = ({
         style={{ 
           top: position.top, 
           left: Math.max(8, Math.min(position.left, window.innerWidth - 240)),
-          transform: 'translateY(-100%)' 
+          transform: isMobile ? 'translateY(-100%)' : 'none' 
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -302,7 +303,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       const willOpen = !open;
       if (willOpen && extraToolButtonRef.current) {
         const rect = extraToolButtonRef.current.getBoundingClientRect();
-        const isMobile = window.innerWidth < 768;
+        const isMobile = window.innerWidth < 640;
         
         if (isMobile) {
           // On mobile, the toolbar is at the bottom, so open upwards
@@ -327,8 +328,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       const willOpen = !open;
       if (willOpen && shapeButtonRef.current) {
         const rect = shapeButtonRef.current.getBoundingClientRect();
+        const isMobile = window.innerWidth < 640;
         setShapeMenuPosition({
-          top: rect.top - 8,
+          top: isMobile ? rect.top - 8 : rect.bottom + 4,
           left: rect.left,
         });
       }
@@ -341,8 +343,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       const willOpen = !open;
       if (willOpen && lineButtonRef.current) {
         const rect = lineButtonRef.current.getBoundingClientRect();
+        const isMobile = window.innerWidth < 640;
         setLineMenuPosition({
-          top: rect.top - 8,
+          top: isMobile ? rect.top - 8 : rect.bottom + 4,
           left: rect.left,
         });
       }
@@ -351,7 +354,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   };
 
   return (
-    <div className="fixed left-1/2 -translate-x-1/2 bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-1 flex gap-1 z-50 overflow-x-auto max-w-[95vw] items-center top-auto bottom-4 md:top-4 md:bottom-auto">
+    <div className="fixed left-1/2 -translate-x-1/2 bg-white dark:bg-[#1C1C1C] border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-1 flex gap-1 z-50 overflow-x-auto max-w-[95vw] items-center top-auto bottom-4 sm:top-4 sm:bottom-auto">
       {/* Desktop Tools: Show all */}
       <div className="hidden md:flex gap-1">
         {tools.map((tool) => {
